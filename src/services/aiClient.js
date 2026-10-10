@@ -4,7 +4,7 @@ import { todayISO } from '../utils/date'
 import { getLang, tr } from '../i18n/index.js'
 import { aiErrorMessage } from './aiErrors'
 
-const ENDPOINT = '/.netlify/functions/ai-chat'
+const ENDPOINT = '/api/ai-chat'
 
 /** Every AI failure the user should read as-is (the message is already translated and safe to show). */
 export class AiError extends Error {}
