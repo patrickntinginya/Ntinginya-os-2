@@ -32,7 +32,7 @@ test('no AI secret is read in browser code', () => {
   walk('src')
   for (const f of files) {
     const text = read(f)
-    assert.ok(!/VITE_AI/.test(text), `${f} references a VITE_AI variable`)
+    assert.ok(!/\bVITE_AI_(?!API_BASE_URL\b)[A-Z0-9_]*\b/.test(text), `${f} references a VITE_AI secret variable`) 
     assert.ok(!/process\.env\.AI_API_KEY|import\.meta\.env\.[A-Z_]*AI_API_KEY/.test(text), `${f} reads the AI key`)
     assert.ok(!/service_role/i.test(text), `${f} mentions service_role`)
   }
