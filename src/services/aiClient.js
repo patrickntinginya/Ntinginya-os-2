@@ -8,9 +8,12 @@ import { aiErrorMessage } from './aiErrors'
 const NATIVE_AI_BASE_URL =
   'https://ntinginyaos2-2j3nj4036-patrickntinginya.vercel.app'
 
-const configuredBaseUrl = String(
-  import.meta.env.VITE_AI_API_BASE_URL || ''
-).trim().replace(/\/+$/, '')
+const NATIVE_AI_BASE_URL =
+  'https://ntinginyaos2-2j3nj4036-patrickntinginya.vercel.app'
+
+const ENDPOINT = Capacitor.isNativePlatform()
+  ? `${NATIVE_AI_BASE_URL}/api/ai-chat`
+  : '/api/ai-chat' 
 
 const API_BASE_URL =
   configuredBaseUrl ||
