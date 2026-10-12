@@ -1,0 +1,72 @@
+# Builds an UNSIGNED DEBUG APK and uploads it as a workflow artifact.
+# - Runs only on the Android-V1 branch or when started by hand. It never runs for main.
+# - No signing keys, keystores or passwords are used. Release signing is a later phase.
+# STATUS: written but NOT yet run on GitHub. Action versions and the Gradle build are unverified until the first run.
+name: Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [Android-V1]
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Public values the web app already needs. The anon key is designed to be public; access control is Row Level Security.
+      # NEVER put a service-role key or any AI key here.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Capacitor 7 needs JDK 21 to build the Android project.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Check required secrets are set
+        run: |
+          test -n "$VITE_SUPABASE_URL" || { echo "Missing GitHub secret VITE_SUPABASE_URL"; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing GitHub secret VITE_SUPABASE_ANON_KEY"; exit 1; }
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Run existing tests
+        run: npm test
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Generate the Android project if it is not committed
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+
+      - name: Copy web build into the Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-life-os-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

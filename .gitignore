@@ -3,3 +3,15 @@ dist
 .env
 .env.local
 .DS_Store
+
+# Android / Capacitor: the android/ project is generated in CI; never commit build output or signing material.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+*.jks
+*.keystore
+*.p12
+keystore.properties
+signing.properties
