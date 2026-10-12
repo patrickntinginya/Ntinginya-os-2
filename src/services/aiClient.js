@@ -1,10 +1,24 @@
+import { Capacitor } from '@capacitor/core'
 import { supabase } from '../lib/supabase'
 import { db } from './db'
 import { todayISO } from '../utils/date'
 import { getLang, tr } from '../i18n/index.js'
 import { aiErrorMessage } from './aiErrors'
 
-const ENDPOINT = '/api/ai-chat'
+const NATIVE_AI_BASE_URL =
+  'https://ntinginyaos2-2j3nj4036-patrickntinginya.vercel.app'
+
+const configuredBaseUrl = String(
+  import.meta.env.VITE_AI_API_BASE_URL || ''
+).trim().replace(/\/+$/, '')
+
+const API_BASE_URL =
+  configuredBaseUrl ||
+  (Capacitor.isNativePlatform() ? NATIVE_AI_BASE_URL : '')
+
+const ENDPOINT = API_BASE_URL
+  ? `${API_BASE_URL}/api/ai-chat`
+  : '/api/ai-chat'
 
 /** Every AI failure the user should read as-is (the message is already translated and safe to show). */
 export class AiError extends Error {}
