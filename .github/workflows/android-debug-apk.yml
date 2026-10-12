@@ -35,6 +35,15 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: false
+          packages: ''
+
+      - name: Accept Android SDK licenses non-interactively
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || [[ "${PIPESTATUS[1]}" -eq 0 ]]
+          sdkmanager --install "platform-tools"
 
       - name: Check required secrets are set
         run: |
