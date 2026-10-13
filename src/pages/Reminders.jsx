@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Bell, Check, Repeat, CheckSquare, Target } from 'lucide-react'
 import ResourcePage from '../components/ResourcePage'
 import Card from '../components/ui/Card'
@@ -7,10 +8,19 @@ import ItemActions from '../components/ui/ItemActions'
 import { REMINDER_PRIORITIES, REMINDER_REPEAT, labelOf } from '../lib/constants'
 import { formatDate, formatTime, nextOccurrence, todayISO } from '../utils/date'
 import { tr } from '../i18n'
+import { isNativePlatform } from '../lib/platform'
+import { reminderAdapter } from '../native/runtime'
+import NativeSyncBanner from '../native/NativeSyncBanner'
 
 const PRIORITY_TONE = { high: 'danger', medium: 'warn', low: 'neutral' }
 
 function ReminderCard({ reminder, actions, lookups }) {
+  // Android: tapping a notification opens /reminders?focus=<id>; scroll to and highlight that reminder.
+  const [params] = useSearchParams()
+  const focused = params.get('focus') === reminder.id
+  useEffect(() => {
+    if (focused) document.getElementById(`reminder-${reminder.id}`)?.scrollIntoView?.({ block: 'center' })
+  }, [focused, reminder.id])
   const repeating = reminder.repeat_option !== 'none'
   const overdue = !reminder.is_done && reminder.remind_date < todayISO()
   const task = reminder.task_id ? lookups.rows.tasks?.find((t) => t.id === reminder.task_id) : null
@@ -23,7 +33,7 @@ function ReminderCard({ reminder, actions, lookups }) {
       : actions.update({ is_done: !reminder.is_done })
 
   return (
-    <Card className="flex items-start gap-3 p-3">
+    <Card className={`flex items-start gap-3 p-3${focused ? ' ring-2 ring-brand-500' : ''}`} id={`reminder-${reminder.id}`}>
       <button type="button" onClick={complete}
         aria-label={repeating ? `Done for now: ${reminder.title}` : reminder.is_done ? `Mark ${reminder.title} as not done` : `Mark ${reminder.title} as done`}
         className="flex h-11 w-11 shrink-0 items-center justify-center">
@@ -39,6 +49,7 @@ function ReminderCard({ reminder, actions, lookups }) {
         {reminder.description && <p className="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{reminder.description}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge tone={PRIORITY_TONE[reminder.priority]}>{labelOf(REMINDER_PRIORITIES, reminder.priority)}</Badge>
+          {reminder._failed ? <Badge tone="danger">{tr('Not saved')}</Badge> : reminder._pending ? <Badge tone="warn">{tr('Waiting to sync')}</Badge> : null}
           {repeating && (
             <Badge tone="info"><Repeat size={12} className="mr-1" aria-hidden="true" />
               {reminder.repeat_option === 'custom' ? `Every ${reminder.repeat_interval_days} days` : labelOf(REMINDER_REPEAT, reminder.repeat_option)}
@@ -57,7 +68,11 @@ export function makeRemindersConfig() {
   return {
     table: 'reminders',
     title: 'Reminders',
-    subtitle: 'Shown in the app and as device notifications while the app is open.',
+    subtitle: isNativePlatform()
+      ? 'Shown in the app. Turn on device notifications in Notifications to get them on this phone.'
+      : 'Shown in the app and as device notifications while the app is open.',
+    // Android only: read and write through the local copy so reminders work offline. Web keeps the direct Supabase path.
+    adapter: isNativePlatform() ? reminderAdapter : undefined,
     singular: 'reminder',
     icon: Bell,
     lookups: ['tasks', 'goals'],
@@ -92,5 +107,10 @@ export function makeRemindersConfig() {
 
 export default function Reminders() {
   const config = useMemo(makeRemindersConfig, [])
-  return <ResourcePage config={config} />
+  return (
+    <>
+      {isNativePlatform() && <NativeSyncBanner />}
+      <ResourcePage config={config} />
+    </>
+  )
 }

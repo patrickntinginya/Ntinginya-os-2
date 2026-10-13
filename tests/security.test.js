@@ -12,8 +12,17 @@ const serverFiles = walk(path.join(root, 'netlify')).filter((f) => f.endsWith('.
 
 test('no AI key or service-role key is referenced by browser code', () => {
   for (const f of srcFiles) {
-    assert.ok(!/AI_API_KEY|SERVICE_ROLE|service_role/i.test(s), `${f} mentions a server secret`)
-    assert.ok(!/import\.meta\.env\.VITE_AI/.test(s), `${f} reads a VITE_AI variable`)
+    const s = read(f)
+
+    assert.ok(
+      !/AI_API_KEY|SERVICE_ROLE|service_role/i.test(s),
+      `${f} mentions a server secret`
+    )
+
+    assert.ok(
+      !/import\.meta\.env\.VITE_AI/.test(s),
+      `${f} reads a VITE_AI variable`
+    )
   }
 })
 test('no VITE_ variable holds a secret anywhere in the project', () => {

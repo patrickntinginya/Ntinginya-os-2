@@ -9,6 +9,7 @@ import { useI18n } from '../i18n/I18nContext'
 import { useDeviceNotifications, useNotificationSync, useUnreadCount } from '../hooks/useAppServices'
 import Logo from '../components/Logo'
 import Modal from '../components/ui/Modal'
+import { isNativePlatform } from '../lib/platform'
 
 const linkClass = ({ isActive, highlight }) =>
   `flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-base font-medium transition-colors ${
@@ -102,7 +103,7 @@ export default function AppLayout() {
   const { t } = useI18n()
   const unread = useUnreadCount()
   useNotificationSync()
-  useDeviceNotifications(Boolean(profile?.notifications_enabled))
+  useDeviceNotifications(Boolean(profile?.notifications_enabled) && !isNativePlatform()) // Android uses scheduled local notifications instead
   const current = ALL_ITEMS.find((i) => isActiveItem(i, pathname))
 
   return (

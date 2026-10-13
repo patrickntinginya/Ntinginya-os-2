@@ -11,6 +11,8 @@ import Spinner from '../components/ui/Spinner'
 import ErrorState from '../components/ui/ErrorState'
 import EmptyState from '../components/ui/EmptyState'
 import DeviceNotificationsCard from '../components/DeviceNotificationsCard'
+import NativeNotificationsCard from '../native/NativeNotificationsCard'
+import { isNativePlatform } from '../lib/platform'
 import { dateOfTimestamp, formatDate } from '../utils/date'
 import { friendlyError } from '../utils/format'
 import { tr } from '../i18n'
@@ -85,7 +87,7 @@ export default function Notifications() {
           })}
         </ul>
       )}
-      <Card className="mt-6 p-4"><h2 className="mb-2 text-base font-semibold">{tr('Device notifications')}</h2><DeviceNotificationsCard /></Card>
+      <Card className="mt-6 p-4"><h2 className="mb-2 text-base font-semibold">{tr('Device notifications')}</h2>{isNativePlatform() ? <NativeNotificationsCard /> : <DeviceNotificationsCard />}</Card>
     </div>
   )
 }

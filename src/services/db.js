@@ -11,6 +11,11 @@ function unwrap({ data, error }) {
   return data
 }
 
+/** Lets the Android shell rebuild reminder alarms after reminders are written by any screen. Nothing listens on the web. */
+function announce(table) {
+  if (table === 'reminders' && typeof window !== 'undefined') window.dispatchEvent(new Event('life-os:reminders-changed'))
+}
+
 export const db = {
   async list(table, { order = [{ column: 'created_at', ascending: false }], limit, filters = [] } = {}) {
     let q = supabase.from(table).select('*')
@@ -21,16 +26,21 @@ export const db = {
   },
 
   async create(table, values) {
-    return unwrap(await supabase.from(table).insert(values).select().single())
+    const row = unwrap(await supabase.from(table).insert(values).select().single())
+    announce(table)
+    return row
   },
 
   async update(table, id, values) {
-    return unwrap(await supabase.from(table).update(values).eq('id', id).select().single())
+    const row = unwrap(await supabase.from(table).update(values).eq('id', id).select().single())
+    announce(table)
+    return row
   },
 
   async remove(table, id) {
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) throw error
+    announce(table)
   },
 
   async rpc(name, args) {

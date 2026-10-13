@@ -21,16 +21,17 @@ const resolve = (v, arg) => (typeof v === 'function' ? v(arg) : v)
  *
  * config: table, title, subtitle, singular, icon, order, queryFilters, fields (array or fn(lookups)),
  *   defaults (object or fn), lookups: [names], extras: [tables], renderItem(item, actions, lookups, ctx),
- *   sections(items), empty, filter, search: [fields], validate, beforeSave, onMutated, itemLabel
+ *   sections(items), empty, filter, search: [fields], validate, beforeSave, onMutated, itemLabel,
+ *   adapter (optional data source with the same methods as services/db.js; default is db)
  */
 export default function ResourcePage({ config, embedded = false, onItemsChange, headerExtra, openNewSignal }) {
   const {
     table, title, subtitle, singular, icon, order, queryFilters, fields, defaults, renderItem, sections, empty,
-    filter, search, validate, warn, beforeSave, onMutated, lookups: lookupNames = [], extras: extraNames = [],
+    filter, search, validate, warn, beforeSave, onMutated, adapter, lookups: lookupNames = [], extras: extraNames = [],
     itemLabel = (i) => i.title || i.name || i.topic,
   } = config
 
-  const { items, loading, error, reload, create, update, remove } = useResource(table, { order, filters: queryFilters, onMutated })
+  const { items, loading, error, reload, create, update, remove } = useResource(table, { order, filters: queryFilters, onMutated, adapter })
   const lookups = useLookups(lookupNames)
   const [extras, setExtras] = useState({})
   const [form, setForm] = useState(null)

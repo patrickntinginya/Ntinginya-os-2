@@ -8,6 +8,7 @@ import { dailyLimitReached, makeBurstLimiter } from '../lib/ai/limits.js'
 import { MODES, MODE_INSTRUCTIONS, systemPrompt } from '../lib/ai/prompts.js'
 import { buildContext } from '../lib/ai/context.js'
 import { toolDefinitions, validateAction } from '../../src/lib/ai/actions.js'
+import { preflight, withCors } from '../lib/ai/cors.js'
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const GENERIC = 'Something went wrong. Please try again.'
@@ -16,7 +17,7 @@ const failure = (code, status) => json(status, { error: code, message: FALLBACK_
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-export default async (request) => {
+async function handle(request) {
   const env = process.env
   const url = new URL(request.url)
 
@@ -148,4 +149,12 @@ export default async (request) => {
     console.error('ai-chat failed:', e?.code || e?.name || 'unknown')
     return json(500, { error: 'server_error', message: GENERIC })
   }
+}
+
+// Entry point. CORS is applied around the unchanged handler above: allowed origins only (see ../lib/ai/cors.js).
+// The handler still verifies the caller's Bearer token on every request.
+export default async (request) => {
+  const early = preflight(request)
+  if (early) return early
+  return withCors(request, await handle(request))
 }

@@ -28,12 +28,14 @@ import AiAssistant from './pages/AiAssistant'
 import SearchPage from './pages/SearchPage'
 import Settings from './pages/Settings'
 import NotFound from './pages/NotFound'
+import NativeBridge from './native/NativeBridge'
 
 export default function App() {
   if (!isSupabaseConfigured) return <ConfigMissing />
 
   return (
     <AuthProvider>
+      <NativeBridge />
       <Routes>
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<Login />} />

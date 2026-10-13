@@ -1,285 +1,172 @@
 /**
- * IndexedDB wrapper for offline-first local storage.
- * Stores reminders and a mutation queue for changes made while offline.
+ * IndexedDB storage for offline reminders (Android app). Rewritten in Phase 2; the first version was never connected to the app.
+ *
+ * Layout (database 'life-os-offline', version 2):
+ *   rows  - the last copy of each reminder seen from the server.   key pk = `${userId}:${reminderId}`
+ *   ops   - ONE pending change per reminder (create | update | delete). key pk = `${userId}:${reminderId}`
+ *   meta  - small per-user values.                                   key = `${userId}:${name}`
+ *
+ * Every record carries its user_id and every read is by user, so one account can never see another account's local data.
+ * Every call resolves only when its IndexedDB TRANSACTION COMPLETES (not when a request fires), so "saved" means committed.
+ * Version 1 stores ('reminders', 'mutations') were never populated by any released code; the upgrade removes them.
  */
+export const DB_NAME = 'life-os-offline'
+export const DB_VERSION = 2
 
-const DB_NAME = 'life-os-offline'
-const DB_VERSION = 1
-const REMINDERS_STORE = 'reminders'
-const MUTATIONS_STORE = 'mutations'
-
-let db = null
-
-export async function initOfflineStorage() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => {
-      db = request.result
-      resolve(db)
-    }
-
-    request.onupgradeneeded = (event) => {
-      const database = event.target.result
-      
-      // Reminders store: keyed by local ID, indexed by server ID and sync status
-      if (!database.objectStoreNames.contains(REMINDERS_STORE)) {
-        const remindersStore = database.createObjectStore(REMINDERS_STORE, { keyPath: 'local_id' })
-        remindersStore.createIndex('server_id', 'server_id', { unique: false })
-        remindersStore.createIndex('sync_status', 'sync_status', { unique: false })
-        remindersStore.createIndex('user_id', 'user_id', { unique: false })
-      }
-
-      // Mutations store: changes queued for sync
-      // Each mutation has: id, user_id, type (create/update/complete/delete), table, reminder_id, data, created_at, synced_at
-      if (!database.objectStoreNames.contains(MUTATIONS_STORE)) {
-        const mutationsStore = database.createObjectStore(MUTATIONS_STORE, { keyPath: 'id', autoIncrement: true })
-        mutationsStore.createIndex('user_id', 'user_id', { unique: false })
-        mutationsStore.createIndex('synced_at', 'synced_at', { unique: false })
-      }
-    }
-  })
-}
-
-function getDb() {
-  if (!db) throw new Error('Offline storage not initialized. Call initOfflineStorage() first.')
-  return db
-}
-
-// ============================================================================
-// REMINDERS STORE OPERATIONS
-// ============================================================================
-
-export async function saveReminderLocally(reminder, userId, syncStatus = 'unsynced') {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readwrite').objectStore(REMINDERS_STORE)
-  
-  const record = {
-    local_id: reminder.local_id || `local_${Date.now()}_${Math.random()}`,
-    server_id: reminder.id || null,
-    user_id: userId,
-    sync_status: syncStatus, // 'unsynced', 'syncing', 'synced', 'failed'
-    data: reminder,
-    updated_at: new Date().toISOString(),
-  }
-
-  return new Promise((resolve, reject) => {
-    const request = store.put(record)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(record.local_id)
-  })
-}
-
-export async function getRemindersLocally(userId) {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readonly').objectStore(REMINDERS_STORE)
-  const index = store.index('user_id')
-
-  return new Promise((resolve, reject) => {
-    const request = index.getAll(userId)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => {
-      const records = request.result
-      // Return both server and local data, merged
-      const reminders = records.map((r) => ({
-        ...r.data,
-        local_id: r.local_id,
-        sync_status: r.sync_status,
-        _updated_at: r.updated_at,
-      }))
-      resolve(reminders)
-    }
-  })
-}
-
-export async function getLocalReminderById(localId) {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readonly').objectStore(REMINDERS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const request = store.get(localId)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => {
-      const record = request.result
-      resolve(record ? { ...record.data, local_id: record.local_id, sync_status: record.sync_status } : null)
-    }
-  })
-}
-
-export async function deleteReminderLocally(localId) {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readwrite').objectStore(REMINDERS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const request = store.delete(localId)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve()
-  })
-}
-
-export async function updateReminderSyncStatus(localId, syncStatus) {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readwrite').objectStore(REMINDERS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const getRequest = store.get(localId)
-    getRequest.onerror = () => reject(getRequest.error)
-    getRequest.onsuccess = () => {
-      const record = getRequest.result
-      if (!record) {
-        reject(new Error(`Reminder not found: ${localId}`))
-        return
-      }
-      record.sync_status = syncStatus
-      record.updated_at = new Date().toISOString()
-      const putRequest = store.put(record)
-      putRequest.onerror = () => reject(putRequest.error)
-      putRequest.onsuccess = () => resolve()
-    }
-  })
-}
-
-export async function linkLocalReminderToServer(localId, serverId) {
-  const database = getDb()
-  const store = database.transaction([REMINDERS_STORE], 'readwrite').objectStore(REMINDERS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const getRequest = store.get(localId)
-    getRequest.onerror = () => reject(getRequest.error)
-    getRequest.onsuccess = () => {
-      const record = getRequest.result
-      if (!record) {
-        reject(new Error(`Reminder not found: ${localId}`))
-        return
-      }
-      record.server_id = serverId
-      record.data.id = serverId
-      record.sync_status = 'synced'
-      record.updated_at = new Date().toISOString()
-      const putRequest = store.put(record)
-      putRequest.onerror = () => reject(putRequest.error)
-      putRequest.onsuccess = () => resolve()
-    }
-  })
-}
-
-// ============================================================================
-// MUTATIONS STORE OPERATIONS
-// ============================================================================
-
-export async function queueMutation(userId, type, table, reminderId, data) {
-  const database = getDb()
-  const store = database.transaction([MUTATIONS_STORE], 'readwrite').objectStore(MUTATIONS_STORE)
-
-  const mutation = {
-    user_id: userId,
-    type, // 'create', 'update', 'complete', 'delete'
-    table,
-    reminder_id: reminderId,
-    data,
-    created_at: new Date().toISOString(),
-    synced_at: null,
-    retry_count: 0,
-  }
-
-  return new Promise((resolve, reject) => {
-    const request = store.add(mutation)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result)
-  })
-}
-
-export async function getPendingMutations(userId) {
-  const database = getDb()
-  const store = database.transaction([MUTATIONS_STORE], 'readonly').objectStore(MUTATIONS_STORE)
-  const index = store.index('user_id')
-
-  return new Promise((resolve, reject) => {
-    const request = index.getAll(userId)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => {
-      const mutations = request.result.filter((m) => !m.synced_at)
-      resolve(mutations)
-    }
-  })
-}
-
-export async function markMutationSynced(mutationId, serverId = null) {
-  const database = getDb()
-  const store = database.transaction([MUTATIONS_STORE], 'readwrite').objectStore(MUTATIONS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const getRequest = store.get(mutationId)
-    getRequest.onerror = () => reject(getRequest.error)
-    getRequest.onsuccess = () => {
-      const mutation = getRequest.result
-      if (!mutation) {
-        reject(new Error(`Mutation not found: ${mutationId}`))
-        return
-      }
-      mutation.synced_at = new Date().toISOString()
-      if (serverId) mutation.server_id = serverId
-      const putRequest = store.put(mutation)
-      putRequest.onerror = () => reject(putRequest.error)
-      putRequest.onsuccess = () => resolve()
-    }
-  })
-}
-
-export async function incrementMutationRetry(mutationId) {
-  const database = getDb()
-  const store = database.transaction([MUTATIONS_STORE], 'readwrite').objectStore(MUTATIONS_STORE)
-
-  return new Promise((resolve, reject) => {
-    const getRequest = store.get(mutationId)
-    getRequest.onerror = () => reject(getRequest.error)
-    getRequest.onsuccess = () => {
-      const mutation = getRequest.result
-      if (!mutation) {
-        reject(new Error(`Mutation not found: ${mutationId}`))
-        return
-      }
-      mutation.retry_count = (mutation.retry_count || 0) + 1
-      const putRequest = store.put(mutation)
-      putRequest.onerror = () => reject(putRequest.error)
-      putRequest.onsuccess = () => resolve(mutation.retry_count)
-    }
-  })
-}
-
-export async function clearMutationsBefore(isoDate, userId) {
-  const database = getDb()
-  const store = database.transaction([MUTATIONS_STORE], 'readwrite').objectStore(MUTATIONS_STORE)
-  const index = store.index('user_id')
-
-  return new Promise((resolve, reject) => {
-    const request = index.getAll(userId)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => {
-      const mutations = request.result.filter((m) => m.synced_at && m.synced_at < isoDate)
-      let deleted = 0
-      mutations.forEach((m) => {
-        const delRequest = store.delete(m.id)
-        delRequest.onsuccess = () => deleted++
-        delRequest.onerror = () => reject(delRequest.error)
-      })
-      setTimeout(() => resolve(deleted), 100)
-    }
-  })
-}
-
-export async function isIndexedDBAvailable() {
+export const isIndexedDBAvailable = () => {
   try {
-    const request = indexedDB.open('_test_db', 1)
-    return new Promise((resolve) => {
-      request.onerror = () => resolve(false)
-      request.onsuccess = () => {
-        indexedDB.deleteDatabase('_test_db')
-        resolve(true)
-      }
-    })
+    return typeof indexedDB !== 'undefined' && indexedDB !== null
   } catch {
     return false
+  }
+}
+
+const reqP = (request) =>
+  new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+
+function openDb(factory) {
+  return new Promise((resolve, reject) => {
+    const request = factory.open(DB_NAME, DB_VERSION)
+    request.onupgradeneeded = (event) => {
+      const database = request.result
+      for (const old of ['reminders', 'mutations']) if (database.objectStoreNames.contains(old)) database.deleteObjectStore(old)
+      if (!database.objectStoreNames.contains('rows')) database.createObjectStore('rows', { keyPath: 'pk' }).createIndex('user_id', 'user_id', { unique: false })
+      if (!database.objectStoreNames.contains('ops')) database.createObjectStore('ops', { keyPath: 'pk' }).createIndex('user_id', 'user_id', { unique: false })
+      if (!database.objectStoreNames.contains('meta')) database.createObjectStore('meta', { keyPath: 'key' })
+      void event
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+    request.onblocked = () => reject(new Error('Offline storage is blocked by another open tab'))
+  })
+}
+
+/** Runs `fn(stores)` inside one transaction; resolves with fn's result once the transaction has COMMITTED. */
+function run(database, names, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(names, mode)
+    let result
+    let failed = false
+    tx.oncomplete = () => (failed ? undefined : resolve(result))
+    tx.onerror = () => {
+      failed = true
+      reject(tx.error || new Error('Offline storage transaction failed'))
+    }
+    tx.onabort = () => {
+      failed = true
+      reject(tx.error || new Error('Offline storage transaction aborted'))
+    }
+    const stores = Object.fromEntries(names.map((n) => [n, tx.objectStore(n)]))
+    Promise.resolve()
+      .then(() => fn(stores))
+      .then(
+        (r) => {
+          result = r
+        },
+        (e) => {
+          failed = true
+          try {
+            tx.abort()
+          } catch {
+            /* already finished */
+          }
+          reject(e)
+        },
+      )
+  })
+}
+
+const pk = (userId, id) => `${userId}:${id}`
+
+/** Creates the storage object. `factory` is injectable so tests can use an in-memory IndexedDB. */
+export function createIdbStorage(factory = globalThis.indexedDB) {
+  let dbPromise = null
+  const database = () => (dbPromise ||= openDb(factory).catch((e) => {
+    dbPromise = null
+    throw e
+  }))
+  const tx = async (names, mode, fn) => run(await database(), names, mode, fn)
+
+  const need = (userId) => {
+    if (!userId) throw new Error('Offline storage needs a signed-in user')
+    return String(userId)
+  }
+
+  return {
+    // ---- cached server rows ----
+    async getSnapshot(userId) {
+      const uid = need(userId)
+      const records = await tx(['rows'], 'readonly', ({ rows }) => reqP(rows.index('user_id').getAll(uid)))
+      return records.filter((r) => r.user_id === uid).map((r) => r.data)
+    },
+    async getRow(userId, id) {
+      const uid = need(userId)
+      const rec = await tx(['rows'], 'readonly', ({ rows }) => reqP(rows.get(pk(uid, id))))
+      return rec && rec.user_id === uid ? rec.data : null
+    },
+    async putRow(userId, row) {
+      const uid = need(userId)
+      await tx(['rows'], 'readwrite', ({ rows }) => reqP(rows.put({ pk: pk(uid, row.id), user_id: uid, id: row.id, data: row })))
+    },
+    async deleteRow(userId, id) {
+      const uid = need(userId)
+      await tx(['rows'], 'readwrite', ({ rows }) => reqP(rows.delete(pk(uid, id))))
+    },
+    /** Replaces this user's cached rows with a fresh server list, atomically (all or nothing). */
+    async replaceSnapshot(userId, list) {
+      const uid = need(userId)
+      await tx(['rows', 'meta'], 'readwrite', async ({ rows, meta }) => {
+        const existing = await reqP(rows.index('user_id').getAll(uid))
+        for (const rec of existing) if (rec.user_id === uid) await reqP(rows.delete(rec.pk))
+        for (const row of list) await reqP(rows.put({ pk: pk(uid, row.id), user_id: uid, id: row.id, data: row }))
+        await reqP(meta.put({ key: `${uid}:snapshot_at`, value: Date.now() }))
+      })
+    },
+
+    // ---- pending changes (one per reminder) ----
+    async getOp(userId, reminderId) {
+      const uid = need(userId)
+      const op = await tx(['ops'], 'readonly', ({ ops }) => reqP(ops.get(pk(uid, reminderId))))
+      return op && op.user_id === uid ? op : null
+    },
+    async putOp(userId, op) {
+      const uid = need(userId)
+      await tx(['ops'], 'readwrite', ({ ops }) => reqP(ops.put({ ...op, pk: pk(uid, op.reminder_id), user_id: uid })))
+    },
+    async deleteOp(userId, reminderId) {
+      const uid = need(userId)
+      await tx(['ops'], 'readwrite', ({ ops }) => reqP(ops.delete(pk(uid, reminderId))))
+    },
+    async listOps(userId) {
+      const uid = need(userId)
+      const all = await tx(['ops'], 'readonly', ({ ops }) => reqP(ops.index('user_id').getAll(uid)))
+      return all.filter((o) => o.user_id === uid).sort((a, b) => (a.queued_at - b.queued_at) || (a.reminder_id < b.reminder_id ? -1 : 1))
+    },
+
+    // ---- meta + cleanup ----
+    async getMeta(userId, name) {
+      const uid = need(userId)
+      const rec = await tx(['meta'], 'readonly', ({ meta }) => reqP(meta.get(`${uid}:${name}`)))
+      return rec ? rec.value : null
+    },
+    async setMeta(userId, name, value) {
+      const uid = need(userId)
+      await tx(['meta'], 'readwrite', ({ meta }) => reqP(meta.put({ key: `${uid}:${name}`, value })))
+    },
+    /**
+     * Removes ONE user's local data. Never touches another user's records.
+     * keepOps: keep that user's unsynced changes (used on sign-out so nothing is lost; they sync when that user signs in again).
+     */
+    async clearUser(userId, { keepOps = false } = {}) {
+      const uid = need(userId)
+      await tx(['rows', 'ops', 'meta'], 'readwrite', async ({ rows, ops, meta }) => {
+        for (const rec of await reqP(rows.index('user_id').getAll(uid))) if (rec.user_id === uid) await reqP(rows.delete(rec.pk))
+        if (!keepOps) for (const rec of await reqP(ops.index('user_id').getAll(uid))) if (rec.user_id === uid) await reqP(ops.delete(rec.pk))
+        await reqP(meta.delete(`${uid}:snapshot_at`))
+      })
+    },
   }
 }

@@ -11,6 +11,7 @@ import { getAiStatus, testAiConnection } from '../services/aiClient'
 import { supabase } from '../lib/supabase'
 import { friendlyAuthError, friendlyError } from '../utils/format'
 import { tr } from '../i18n'
+import { isNativePlatform } from '../lib/platform'
 
 function Section({ title, description, children }) {
   return (
@@ -321,6 +322,7 @@ function AiSection() {
 
 function PrivacySection() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -333,6 +335,7 @@ function PrivacySection() {
     try {
       const { error: rpcError } = await supabase.rpc('delete_my_account')
       if (rpcError) throw rpcError
+      if (isNativePlatform()) await import('../native/runtime').then((m) => m.purgeLocalUserData(user?.id)).catch(() => {})
       await supabase.auth.signOut().catch(() => {})
       navigate('/login', { replace: true })
     } catch (err) {

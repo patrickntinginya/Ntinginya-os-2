@@ -21,6 +21,9 @@ jobs:
       # NEVER put a service-role key or any AI key here.
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # Public address of the deployed backend that serves /api/ai-chat (an https origin, no path). It is a URL, not a secret,
+      # so it is a repository VARIABLE. Without it the app builds fine but the AI Assistant reports "not set up" on Android.
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,15 +38,15 @@ jobs:
           java-version: 21
 
       - uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
-          packages: 'platform-tools'
 
       - name: Check required secrets are set
         run: |
           test -n "$VITE_SUPABASE_URL" || { echo "Missing GitHub secret VITE_SUPABASE_URL"; exit 1; }
           test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing GitHub secret VITE_SUPABASE_ANON_KEY"; exit 1; }
+
+      - name: Warn if the AI backend address is not configured
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then echo "::warning::Repository variable VITE_API_BASE_URL is not set. The Android AI Assistant will report that it is not set up."; fi
 
       - name: Install dependencies
         run: |
@@ -61,6 +64,9 @@ jobs:
 
       - name: Copy web build into the Android project
         run: npx cap sync android
+
+      - name: Apply deep links and permissions to the generated manifest
+        run: node scripts/android-configure.mjs
 
       - name: Build debug APK
         working-directory: android
