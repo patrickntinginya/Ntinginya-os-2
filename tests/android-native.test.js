@@ -470,7 +470,7 @@ test('web behavior of shared code is unchanged: db still talks to Supabase direc
 
 test('only the documented VITE_ variables exist, and no AI or service-role name is exposed to the browser', () => {
   const allowed = new Set(['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_API_BASE_URL'])
-  for (const f of [...srcFiles, ...['.github/workflows/android-debug-apk.yml', 'capacitor.config.ts', 'package.json'].map((p) => new URL(`../${p}`, import.meta.url).pathname)]) {
+  for (const f of [...srcFiles, ...['.github/workflows/android-debug-apk.yml', 'capacitor.config.json', 'package.json'].map((p) => new URL(`../${p}`, import.meta.url).pathname)]) {
     for (const [name] of readFileSync(f, 'utf8').matchAll(/VITE_[A-Z0-9_]+/g)) assert.ok(allowed.has(name), `${f}: ${name}`)
   }
   assert.doesNotMatch(read('.github/workflows/android-debug-apk.yml'), /SERVICE_ROLE|GEMINI|AI_API_KEY|AI_PROVIDER/)

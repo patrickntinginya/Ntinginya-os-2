@@ -8,11 +8,12 @@ import { isNativePlatform } from '../src/lib/platform.js'
 const root = new URL('../', import.meta.url).pathname
 const read = (f) => fs.readFileSync(path.join(root, f), 'utf8')
 
-test('capacitor.config.ts uses the agreed appId and the Vite output folder', () => {
-  const cfg = read('capacitor.config.ts')
-  assert.match(cfg, /appId:\s*'com\.ntinginya\.personallifeos'/)
-  assert.match(cfg, /webDir:\s*'dist'/)
-  assert.ok(!/server:\s*\{[^}]*\burl\s*:/.test(cfg), 'must bundle the app, not load a remote URL')
+test('capacitor.config.json uses the agreed appId and the Vite output folder', () => {
+  const cfg = JSON.parse(read('capacitor.config.json'))
+  assert.equal(cfg.appId, 'com.ntinginya.personallifeos')
+  assert.equal(cfg.webDir, 'dist')
+  assert.equal(cfg.server?.androidScheme, 'https')
+  assert.ok(!cfg.server?.url, 'must bundle the app, not load a remote URL')
 })
 
 test('package.json keeps every original script and the web dependencies', () => {
