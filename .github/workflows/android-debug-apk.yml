@@ -37,11 +37,17 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Check required secrets are set
         run: |
