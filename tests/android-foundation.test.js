@@ -47,7 +47,7 @@ test('isNativePlatform is false in a browser and true only when Capacitor says s
 test('the APK workflow is debug-only, never runs for main, and uses no signing material', () => {
   const full = read('.github/workflows/android-debug-apk.yml')
   const wf = full.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n') // comments may mention the words below
-  assert.match(wf, /branches:\s*\[Android-V1\]/)
+  assert.match(wf, /branches:\s*\[Android-V1,\s*v5-build-check\]/)
   assert.ok(!/branches:[^\n]*\bmain\b/.test(wf), 'must not trigger on main')
   assert.match(wf, /assembleDebug/)
   assert.ok(!/assembleRelease|bundleRelease|storePassword|keyPassword|keystore|\.jks/i.test(wf), 'no release signing in Phase 1')
