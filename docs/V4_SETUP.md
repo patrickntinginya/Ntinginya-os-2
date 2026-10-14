@@ -53,7 +53,7 @@ For local work copy `.env.example` to `.env`. Run `npx netlify dev` (not `npm ru
 Push the updated code to the GitHub repository the site is connected to. Netlify rebuilds (`npm run build`, publish `dist`, functions `netlify/functions` - already in `netlify.toml`, unchanged in shape). Do **not** create a new site. Your domain and settings stay.
 
 ## 7. How the AI works and its limits
-`Browser -> Netlify function (ai-chat) -> Gemini -> validated reply -> app`.
+`Browser -> Vercel function (api/ai-chat) -> Gemini -> validated reply -> app`.
 - The function verifies your Supabase login, reads **your** data with your own token (so Row Level Security applies), builds a short summary (not the whole database), and calls Gemini with the key it holds.
 - The AI can only **propose** actions (task, reminder, event, goal, project, idea, learning item, milestone). Each appears as a card with **Confirm** / **Cancel**. Nothing is saved until you press Confirm. It cannot delete anything, move money or send messages.
 - Limits: a per-minute burst limit and a daily limit per user. When Google reports a quota problem you see: "Matumizi ya AI kwa sasa yamefikia kikomo. Tafadhali jaribu baadaye." / "Your AI usage limit has been reached. Please try again later."

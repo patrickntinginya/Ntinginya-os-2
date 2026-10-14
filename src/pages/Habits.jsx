@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, Check, ChevronDown, Flame, Pencil, Plus, RotateCcw, Trash2, Repeat } from 'lucide-react'
+import { Archive, Check, ChevronDown, Flame, LifeBuoy, Pencil, Plus, RotateCcw, Trash2, Repeat } from 'lucide-react'
 import { useSnapshot } from '../hooks/useSnapshot'
 import { supabase } from '../lib/supabase'
 import { setHabitDone } from '../services/habits'
@@ -17,7 +17,13 @@ import StatCard from '../components/ui/StatCard'
 import { addDays, formatTime, toISODate } from '../utils/date'
 import { friendlyError } from '../utils/format'
 import { WEEKDAY_NAMES, doneMap, habitInsights, habitSummary, isDue, overallCompletion } from '../utils/habits'
-import { tr } from '../i18n'
+import { t, tr } from '../i18n'
+import SafeModeModal from '../components/habits/SafeModeModal'
+import StreakNote from '../components/habits/StreakNote'
+import { listActivePlans, listSafeDates, logSafeCompletion } from '../services/safeMode'
+import { isMissingSchema } from '../services/schemaErrors'
+import { streakReport, safeDaysInRun } from '../utils/streaks'
+import { activePlan, planStatus } from '../utils/safeMode'
 
 const KEYS = ['habits', 'habitEntries', 'goals']
 const SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -81,7 +87,7 @@ function HabitForm({ habit, goals, onClose, onSaved }) {
   )
 }
 
-function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, archived }) {
+function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, archived, plan, safeDates, onSafe, onLogSafe }) {
   const [open, setOpen] = useState(false)
   const { habit } = s
   const days = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27))
@@ -107,6 +113,14 @@ function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, 
         <button type="button" className="icon-btn" aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} history for ${habit.name}`} onClick={() => setOpen((o) => !o)}><ChevronDown size={20} className={open ? 'rotate-180' : ''} /></button>
       </div>
 
+      {plan && !archived && (
+        <div className="mt-3 rounded-xl bg-brand-50 p-3 text-sm dark:bg-brand-500/10">
+          <p className="flex items-center gap-2 font-medium"><LifeBuoy size={16} aria-hidden="true" />{t('safe.badge')}: {plan.mini_version}</p>
+          {planStatus(plan, today) === 'expired' && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{t('safe.expired')}</p>}
+          {s.dueToday && !s.doneToday && <Button className="mt-2 w-full !min-h-[44px]" onClick={() => onLogSafe(habit.id)}>{t('safe.didMini')}</Button>}
+        </div>
+      )}
+
       {open && (
         <div className="mt-3 border-t border-slate-200 pt-3 dark:border-white/10">
           <dl className="grid grid-cols-3 gap-2 text-center">
@@ -114,6 +128,7 @@ function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, 
             <div><dd className="text-lg font-bold tabular-nums">{s.longest}</dd><dt className="text-xs text-slate-500 dark:text-slate-400">{tr('Longest')}</dt></div>
             <div><dd className="text-lg font-bold tabular-nums">{s.month ? `${s.month.rate}%` : '-'}</dd><dt className="text-xs text-slate-500 dark:text-slate-400">{tr('This month')}</dt></div>
           </dl>
+          {!archived && <StreakNote report={s.report} safeDays={safeDaysInRun(habit, s.done, safeDates || new Set(), today)} />}
           <h3 className="mb-1 mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">{tr('Last 28 days')}{archived ? '' : ' (tap a day to correct it)'}</h3>
           <div className="grid grid-cols-7 gap-1.5" role="group" aria-label={`History for ${habit.name}`}>
             {days.map((d) => {
@@ -128,6 +143,7 @@ function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, 
           <ul className="mt-3 space-y-1 text-sm">{habitInsights(s, today).map((t) => <li key={t}>{t}</li>)}</ul>
           {goalName && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{tr('Linked goal:')} {goalName}</p>}
           <div className="mt-2 flex flex-wrap gap-1">
+            {!archived && <button type="button" className="inline-flex min-h-[44px] items-center gap-1.5 px-2 text-sm font-medium" onClick={() => onSafe(habit)}><LifeBuoy size={16} aria-hidden="true" />{plan ? t('safe.manage') : t('safe.open')}</button>}
             {!archived && <button type="button" className="inline-flex min-h-[44px] items-center gap-1.5 px-2 text-sm font-medium" onClick={() => onEdit(habit)}><Pencil size={16} aria-hidden="true" />{tr('Edit')}</button>}
             <button type="button" className="inline-flex min-h-[44px] items-center gap-1.5 px-2 text-sm font-medium" onClick={() => onArchive(habit)}>{archived ? <><RotateCcw size={16} aria-hidden="true" />{tr('Restore')}</> : <><Archive size={16} aria-hidden="true" />{tr('Archive')}</>}</button>
             {archived && <button type="button" className="inline-flex min-h-[44px] items-center gap-1.5 px-2 text-sm font-medium text-red-600" onClick={() => onDelete(habit)}><Trash2 size={16} aria-hidden="true" />{tr('Delete')}</button>}
@@ -157,7 +173,33 @@ export default function Habits() {
   const habits = data.habits || []
   const active = habits.filter((h) => !h.archived_at)
   const archived = habits.filter((h) => h.archived_at)
-  const summaries = useMemo(() => active.map((h) => habitSummary(h, map.get(h.id) || new Set(), today)), [active, map, today])
+  const summaries = useMemo(() => active.map((h) => ({ ...habitSummary(h, map.get(h.id) || new Set(), today), report: streakReport(h, map.get(h.id) || new Set(), today) })), [active, map, today])
+
+  // Safe Mode (needs supabase/migrations/004_v5.sql). If it has not been run yet, habits keep working and Safe Mode reports it when used.
+  const [plans, setPlans] = useState([])
+  const [safeDates, setSafeDates] = useState(new Map())
+  const [safeFor, setSafeFor] = useState(null)
+  const loadSafe = useCallback(async () => {
+    try {
+      setPlans(await listActivePlans())
+      setSafeDates(await listSafeDates())
+    } catch (e) {
+      if (!isMissingSchema(e)) setError(friendlyError(e))
+    }
+  }, [])
+  useEffect(() => { loadSafe() }, [loadSafe])
+  const logSafe = async (habitId) => {
+    setError(null)
+    const key = `${habitId}|${today}`
+    setOverrides((o) => ({ ...o, [key]: true }))
+    try {
+      await logSafeCompletion(habitId, today)
+      loadSafe()
+    } catch (e) {
+      setOverrides((o) => ({ ...o, [key]: false }))
+      setError(isMissingSchema(e) ? t('safe.err.migration') : friendlyError(e))
+    }
+  }
   const goals = data.goals || []
   const goalName = (id) => goals.find((g) => g.id === id)?.name
 
@@ -205,7 +247,7 @@ export default function Habits() {
           )}
           <ul className="space-y-3">
             {summaries.map((s) => (
-              <li key={s.habit.id}><HabitCard s={s} today={today} onToggle={toggle} onEdit={setForm} onArchive={archive} goalName={goalName(s.habit.goal_id)} /></li>
+              <li key={s.habit.id}><HabitCard s={s} today={today} onToggle={toggle} onEdit={setForm} onArchive={archive} goalName={goalName(s.habit.goal_id)} plan={activePlan(plans, s.habit.id)} safeDates={safeDates.get(s.habit.id)} onSafe={setSafeFor} onLogSafe={logSafe} /></li>
             ))}
           </ul>
           {active.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">{tr('All your habits are archived.')}</p>}
@@ -218,6 +260,7 @@ export default function Habits() {
           <p className="text-xs text-slate-500 dark:text-slate-400">{tr('Habit reminders appear in')} <Link to="/notifications" className="font-medium text-brand-700 dark:text-brand-300">{tr('Notifications')}</Link> {tr('once the reminder time has passed and the habit is not done. They are not push notifications.')}</p>
         </div>
       )}
+      {safeFor && <SafeModeModal habit={safeFor} plan={activePlan(plans, safeFor.id)} today={today} onClose={() => setSafeFor(null)} onChanged={() => { setSafeFor(null); loadSafe() }} />}
       {form && <HabitForm habit={form.id ? form : null} goals={goals} onClose={() => setForm(null)} onSaved={() => { setForm(null); reload() }} />}
       {toDelete && <ConfirmDialog title={tr('Delete habit?')} message={`"${toDelete.name}" and its whole history will be permanently deleted.`} onConfirm={remove} onClose={() => setToDelete(null)} />}
     </div>

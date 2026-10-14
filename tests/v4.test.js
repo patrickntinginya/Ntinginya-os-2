@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { aiErrorMessage, AI_ERROR_TEXT } from '../src/services/aiErrors.js'
-import { providerErrorReply, FALLBACK_MESSAGES } from '../netlify/lib/ai/http.js'
+import { providerErrorReply, FALLBACK_MESSAGES } from '../api/_lib/ai/http.js'
 import { setActiveLang } from '../src/i18n/index.js'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
@@ -89,12 +89,11 @@ test('offline: a clear bilingual banner says data needs internet', () => {
   assert.match(sw, /offline/i)
 })
 
-test('Netlify: build, publish folder, functions folder and SPA redirect are unchanged in shape', () => {
-  const toml = read('netlify.toml')
-  assert.match(toml, /command = "npm run build"/)
-  assert.match(toml, /publish = "dist"/)
-  assert.match(toml, /directory = "netlify\/functions"/)
-  assert.match(toml, /from = "\/\*"\s*\n\s*to = "\/index\.html"/)
+test('Vercel: SPA rewrite never swallows /api/, and the service worker is not cached', () => {
+  const cfg = JSON.parse(read('vercel.json'))
+  assert.ok(cfg.rewrites.every((r) => /api\//.test(r.source)), 'rewrite must exclude /api/')
+  assert.equal(cfg.rewrites[0].destination, '/index.html')
+  assert.equal(cfg.functions['api/ai-chat.js'].maxDuration, 30)
 })
 
 // ---------- Gemini / secrets ----------
@@ -107,13 +106,13 @@ test('Gemini secrets: no VITE_ AI/Gemini variable anywhere, key only read in the
     }
     return out
   }
-  const all = [...walk('src'), ...walk('netlify'), ...walk('docs'), 'index.html', 'vite.config.js', 'netlify.toml', '.env.example', 'README.md']
+  const all = [...walk('src'), ...walk('api'), ...walk('docs'), 'index.html', 'vite.config.js', 'vercel.json', '.env.example', 'README.md']
   for (const f of all) {
     const text = read(f)
     assert.ok(!/VITE_(GEMINI|AI)[A-Z_]*\s*=/.test(text) && !/import\.meta\.env\.VITE_(GEMINI|AI)/.test(text), `${f} uses a VITE_ AI variable`)
   }
   for (const f of walk('src')) assert.ok(!/GEMINI_API_KEY/.test(read(f)), `${f} (browser code) mentions GEMINI_API_KEY`)
-  const users = all.filter((f) => f.startsWith('netlify/') && /process\.env\.GEMINI_API_KEY|GEMINI_API_KEY/.test(read(f)))
+  const users = all.filter((f) => f.startsWith('api/') && /process\.env\.GEMINI_API_KEY|GEMINI_API_KEY/.test(read(f)))
   assert.ok(users.every((f) => f.includes('provider')), `GEMINI_API_KEY is read outside the provider layer: ${users}`)
 })
 
@@ -133,7 +132,7 @@ test('no key-like value is committed anywhere in the project', () => {
     }
     return out
   }
-  for (const f of [...walk('src'), ...walk('netlify'), ...walk('docs'), ...walk('supabase'), ...walk('tests'), '.env.example', 'README.md']) {
+  for (const f of [...walk('src'), ...walk('api'), ...walk('docs'), ...walk('supabase'), ...walk('tests'), '.env.example', 'README.md']) {
     const text = read(f)
     assert.ok(!/AIza[0-9A-Za-z_-]{30,}/.test(text), `${f} contains a Google API key pattern`)
     assert.ok(!/sk-[A-Za-z0-9]{30,}/.test(text), `${f} contains a secret key pattern`)
@@ -159,7 +158,7 @@ test('every error code the server can send has a translated message in both lang
 })
 
 test('AI never writes to user data tables: the function only inserts into AI tables', () => {
-  const fn = read('netlify/functions/ai-chat.js')
+  const fn = read('api/_lib/ai/handler.js')
   const writes = [...fn.matchAll(/\.from\('([a-z_]+)'\)\s*\.(insert|update|delete|upsert)/g)].map((m) => m[1])
   assert.ok(writes.length > 0)
   for (const t of writes) assert.ok(['ai_conversations', 'ai_messages', 'ai_action_requests'].includes(t), `AI function writes to ${t}`)

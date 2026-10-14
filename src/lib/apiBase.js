@@ -5,7 +5,8 @@
 //    VITE_API_BASE_URL (a public address, not a secret). If it is missing or invalid, AI is reported as unavailable.
 export const AI_PATH = '/api/ai-chat'
 
-/** Accepts only a plain https origin (no path, query or credentials). Returns it without a trailing slash, or '' if invalid. */
+/** Accepts an https address and returns ONLY its origin (no path, query, hash, trailing slash), or '' if invalid or it carries credentials.
+ *  Dropping the path means a value pasted as "https://site/api/ai-chat" or "https://site/login" can never produce "…/api/ai-chat/api/ai-chat". */
 export function normalizeApiBase(value) {
   if (typeof value !== 'string') return ''
   const v = value.trim().replace(/\/+$/, '')
@@ -16,8 +17,7 @@ export function normalizeApiBase(value) {
   } catch {
     return ''
   }
-  if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash) return ''
-  if (u.pathname !== '/' && u.pathname !== '') return ''
+  if (u.protocol !== 'https:' || u.username || u.password) return ''
   return u.origin
 }
 

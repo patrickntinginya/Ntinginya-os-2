@@ -281,7 +281,7 @@ function AiSection() {
   const statusText = !status
     ? tr('Checking...')
     : !status.reachable
-      ? tr('The AI service could not be reached (start with "npx netlify dev" locally).')
+      ? tr('The AI service could not be reached (start with "vercel dev" locally).')
       : test && test !== 'busy'
         ? (test.ok ? tr('Connected') : `${tr('Error')}: ${test.message}`)
         : tr(AI_STATUS_TEXT[status.status] || 'Unknown')

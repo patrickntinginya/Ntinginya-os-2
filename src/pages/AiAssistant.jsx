@@ -183,7 +183,7 @@ export default function AiAssistant() {
         )}
         {unreachable && (
           <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-            {tr('The AI service could not be reached. When running locally, start the app with')} <code>npx netlify dev</code>.
+            {tr('The AI service could not be reached. When running locally, start the app with')} <code>vercel dev</code>.
           </p>
         )}
         {listError && <div className="mb-4"><ErrorState message={listError} compact /></div>}

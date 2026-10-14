@@ -24,6 +24,9 @@ import Reminders from './pages/Reminders'
 import Notifications from './pages/Notifications'
 import Insights from './pages/Insights'
 import Reviews from './pages/Reviews'
+import Motivation from './pages/Motivation'
+import Calm from './pages/Calm'
+import Reflections from './pages/Reflections'
 import AiAssistant from './pages/AiAssistant'
 import SearchPage from './pages/SearchPage'
 import Settings from './pages/Settings'
@@ -65,6 +68,9 @@ export default function App() {
             <Route path="/insights" element={<Insights />} />
             <Route path="/reviews" element={<Navigate to="/reviews/daily" replace />} />
             <Route path="/reviews/:kind" element={<Reviews />} />
+            <Route path="/motivation" element={<Motivation />} />
+            <Route path="/calm" element={<Calm />} />
+            <Route path="/reflections" element={<Reflections />} />
             <Route path="/ai" element={<AiAssistant />} />
             <Route path="/ai-assistant" element={<Navigate to="/ai" replace />} />
             <Route path="/search" element={<SearchPage />} />

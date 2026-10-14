@@ -8,7 +8,7 @@ const root = new URL('../', import.meta.url).pathname
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]))
 const read = (f) => fs.readFileSync(f, 'utf8')
 const srcFiles = walk(path.join(root, 'src')).filter((f) => /\.(jsx?|css)$/.test(f))
-const serverFiles = walk(path.join(root, 'netlify')).filter((f) => f.endsWith('.js'))
+const serverFiles = walk(path.join(root, 'api')).filter((f) => f.endsWith('.js'))
 
 test('no AI key or service-role key is referenced by browser code', () => {
   for (const f of srcFiles) {
@@ -26,7 +26,7 @@ test('no AI key or service-role key is referenced by browser code', () => {
   }
 })
 test('no VITE_ variable holds a secret anywhere in the project', () => {
-  for (const f of [...srcFiles, ...serverFiles, path.join(root, '.env.example'), path.join(root, 'netlify.toml'), path.join(root, 'vite.config.js')]) {
+  for (const f of [...srcFiles, ...serverFiles, path.join(root, '.env.example'), path.join(root, 'vite.config.js')]) {
     assert.ok(!/VITE_AI|VITE_[A-Z_]*(SECRET|SERVICE|PRIVATE)/.test(read(f)), `${f} defines a secret as a VITE_ variable`)
   }
 })
@@ -37,14 +37,14 @@ test('.env is git-ignored and .env.example holds placeholders only', () => {
   assert.ok(!/sk-[A-Za-z0-9]{10,}|eyJ[A-Za-z0-9_-]{20,}/.test(env))
 })
 test('the AI function authenticates the caller and only ever uses the caller\'s own token', () => {
-  const fn = read(path.join(root, 'netlify/functions/ai-chat.js'))
+  const fn = read(path.join(root, 'api/_lib/ai/handler.js'))
   assert.match(fn, /auth\.getUser\(token\)/)
   assert.match(fn, /global: \{ headers: \{ Authorization: `Bearer \$\{token\}` \} \}/)
   assert.ok(!/SERVICE_ROLE|service_role/i.test(fn))
   assert.match(fn, /status: 401|json\(401/)
 })
 test('the AI function validates proposed actions and never executes them', () => {
-  const fn = read(path.join(root, 'netlify/functions/ai-chat.js'))
+  const fn = read(path.join(root, 'api/_lib/ai/handler.js'))
   assert.match(fn, /validateAction\(call\.name, call\.input\)/)
   assert.match(fn, /status.*pending|ai_action_requests/)
   assert.ok(!/\.delete\(\)/.test(fn.replace(/\/\/.*$/gm, '')), 'the AI function must not delete anything')

@@ -1,98 +1,21 @@
-import aiChat from '../netlify/functions/ai-chat.js'
+// Vercel serverless function: /api/ai-chat (native Node runtime).
+// All logic lives in ./_lib/ai/ (folders starting with "_" are not exposed as routes by Vercel).
+import { handleAiRequest } from './_lib/ai/handler.js'
+import { toWebRequest, sendWebResponse } from './_lib/ai/nodeAdapter.js'
 
-const allowedOrigins = new Set([
-  'https://localhost',
-  'http://localhost',
-  'capacitor://localhost',
-  'https://ntinginyaos2-2j3nj4036-patrickntinginya.vercel.app',
-  ...(process.env.AI_ALLOWED_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
-])
-
-function applyCors(req, res) {
-  const origin = req.headers.origin
-  res.setHeader('Vary', 'Origin')
-
-  if (origin && allowedOrigins.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Authorization, Content-Type'
-    )
-    res.setHeader('Access-Control-Max-Age', '86400')
-  }
-
-  return !origin || allowedOrigins.has(origin)
-}
+export const config = { maxDuration: 30 }
 
 export default async function handler(req, res) {
   try {
-    const originAllowed = applyCors(req, res)
-
-    if (req.method === 'OPTIONS') {
-      if (!originAllowed) {
-        return res.status(403).json({ error: 'origin_not_allowed' })
-      }
-
-      return res.status(204).end()
+    await sendWebResponse(res, await handleAiRequest(await toWebRequest(req)))
+  } catch (e) {
+    // Never include stack traces or request data in the response or the log.
+    console.error('ai-chat adapter failed:', e?.code || e?.name || 'unknown')
+    if (!res.headersSent) {
+      res.statusCode = e?.code === 'too_large' ? 413 : 500
+      res.setHeader('content-type', 'application/json')
+      res.setHeader('cache-control', 'no-store')
     }
-
-    if (req.headers.origin && !originAllowed) {
-      return res.status(403).json({ error: 'origin_not_allowed' })
-    }
-
-    const host = req.headers.host || 'localhost'
-    const protocol = req.headers['x-forwarded-proto'] || 'https'
-    const url = new URL(
-      req.url || '/api/ai-chat',
-      `${protocol}://${host}`
-    )
-
-    const headers = new Headers()
-
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined) {
-        headers.set(
-          key,
-          Array.isArray(value) ? value.join(', ') : String(value)
-        )
-      }
-    }
-
-    let body
-
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      const chunks = []
-
-      for await (const chunk of req) {
-        chunks.push(chunk)
-      }
-
-      body = Buffer.concat(chunks)
-    }
-
-    const request = new Request(url, {
-      method: req.method,
-      headers,
-      ...(body && body.length ? { body } : {}),
-    })
-
-    const response = await aiChat(request)
-
-    res.statusCode = response.status
-
-    response.headers.forEach((value, key) => {
-      res.setHeader(key, value)
-    })
-
-    applyCors(req, res)
-
-    res.end(await response.text())
-  } catch (error) {
-    console.error('AI API error:', error)
-    res.status(500).json({ error: 'server_error' })
+    res.end(JSON.stringify({ error: e?.code === 'too_large' ? 'too_large' : 'server_error', message: 'Something went wrong. Please try again.' }))
   }
 }

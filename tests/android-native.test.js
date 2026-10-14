@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
-import { preflight, withCors, ALLOWED_ORIGINS } from '../netlify/lib/ai/cors.js'
+import { preflight, withCors, ALLOWED_ORIGINS, corsDecision } from '../api/_lib/ai/cors.js'
 import { patchManifest, PERMISSIONS, SCHEME } from '../scripts/androidManifest.mjs'
 import { normalizeApiBase, resolveAiEndpoint, AI_PATH } from '../src/lib/apiBase.js'
 import {
@@ -352,8 +352,15 @@ test('native AI endpoint needs an explicit https origin; without one it is repor
   assert.deepEqual(resolveAiEndpoint({ native: true }), { url: null, configured: false })
   assert.deepEqual(resolveAiEndpoint({ native: true, apiBase: '' }), { url: null, configured: false })
   assert.deepEqual(resolveAiEndpoint({ native: true, apiBase: 'https://app.example.com/' }), { url: 'https://app.example.com/api/ai-chat', configured: true })
-  for (const bad of ['http://app.example.com', 'app.example.com', 'https://user:pw@app.example.com', 'https://app.example.com/some/path', 'https://app.example.com?x=1', 'javascript:alert(1)', 'ftp://x', 5, null]) {
+  for (const bad of ['http://app.example.com', 'app.example.com', 'https://user:pw@app.example.com', 'javascript:alert(1)', 'ftp://x', 5, null]) {
     assert.equal(normalizeApiBase(bad), '', String(bad))
+  }
+})
+
+test('a pasted base with a path/query is reduced to its origin, so the endpoint path is never duplicated', () => {
+  for (const pasted of ['https://app.example.com/api/ai-chat', 'https://app.example.com/login', 'https://app.example.com/api/ai-chat/', 'https://app.example.com?x=1', 'https://app.example.com/#/x']) {
+    assert.equal(normalizeApiBase(pasted), 'https://app.example.com', pasted)
+    assert.equal(resolveAiEndpoint({ native: true, apiBase: pasted }).url, 'https://app.example.com/api/ai-chat')
   }
 })
 
@@ -366,10 +373,12 @@ test('the AI client falls back gracefully and keeps bearer-token auth; no key or
 })
 
 const req = (method, origin, extra = {}) => new Request('https://backend.example/api/ai-chat', { method, headers: { ...(origin ? { origin } : {}), ...extra } })
+const decide = (r, env = {}) => corsDecision(r, env)
 
 test('CORS preflight: the Android origin is allowed with exact-origin headers, never a wildcard', async () => {
   assert.deepEqual(ALLOWED_ORIGINS, ['https://localhost'])
-  const res = preflight(req('OPTIONS', 'https://localhost', { 'access-control-request-method': 'POST' }))
+  const r = req('OPTIONS', 'https://localhost', { 'access-control-request-method': 'POST' })
+  const res = preflight(r, decide(r))
   assert.equal(res.status, 204)
   assert.equal(res.headers.get('access-control-allow-origin'), 'https://localhost')
   assert.equal(res.headers.get('vary'), 'Origin')
@@ -378,42 +387,58 @@ test('CORS preflight: the Android origin is allowed with exact-origin headers, n
   assert.equal(res.headers.get('access-control-allow-credentials'), null, 'no cookie credentials are ever allowed')
 })
 
-test('CORS preflight from any other origin gets no CORS headers', async () => {
-  for (const origin of ['https://evil.example', 'http://localhost', 'https://localhost.evil.example', 'capacitor://localhost', 'null', undefined]) {
-    const res = preflight(req('OPTIONS', origin))
+test('CORS preflight from any other origin is refused with no CORS headers', async () => {
+  for (const origin of ['https://evil.example', 'http://localhost', 'https://localhost.evil.example', 'capacitor://localhost', 'null']) {
+    const r = req('OPTIONS', origin)
+    const res = preflight(r, decide(r))
     assert.equal(res.status, 403, String(origin))
     assert.equal(res.headers.get('access-control-allow-origin'), null)
   }
 })
 
 test('non-OPTIONS requests are not intercepted by preflight', () => {
-  assert.equal(preflight(req('POST', 'https://localhost')), null)
-  assert.equal(preflight(req('GET', undefined)), null)
+  const p = req('POST', 'https://localhost')
+  assert.equal(preflight(p, decide(p)), null)
+  const g = req('GET', undefined)
+  assert.equal(preflight(g, decide(g)), null)
 })
 
-test('withCors: allowed origin gets headers; the website itself (no Origin) and strangers get the response untouched', async () => {
+test('same-origin requests (the website itself) are never blocked, with or without an Origin header', () => {
+  assert.equal(decide(req('POST', undefined)).blocked, false)
+  const same = decide(req('POST', 'https://backend.example'))
+  assert.equal(same.blocked, false)
+  assert.equal(same.allowed, false, 'same origin needs no CORS headers')
+})
+
+test('extra origins come only from AI_ALLOWED_ORIGINS / Vercel host variables and must be https', () => {
+  assert.equal(decide(req('POST', 'https://app.example.org'), { AI_ALLOWED_ORIGINS: 'https://app.example.org/, http://insecure.example' }).allowed, true)
+  assert.equal(decide(req('POST', 'http://insecure.example'), { AI_ALLOWED_ORIGINS: 'http://insecure.example' }).blocked, true)
+  assert.equal(decide(req('POST', 'https://my-app.vercel.app'), { VERCEL_PROJECT_PRODUCTION_URL: 'my-app.vercel.app' }).allowed, true)
+  assert.equal(decide(req('POST', 'https://evil.example'), { AI_ALLOWED_ORIGINS: '*' }).blocked, true)
+})
+
+test('withCors: allowed origin gets headers; the website itself and the body stay untouched', async () => {
   const base = () => new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } })
-  const allowed = withCors(req('POST', 'https://localhost'), base())
+  const allowed = withCors(base(), decide(req('POST', 'https://localhost')))
   assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://localhost')
   assert.equal(allowed.headers.get('content-type'), 'application/json')
   assert.equal(await allowed.text(), '{"ok":true}')
-  for (const origin of [undefined, 'https://evil.example']) {
-    const r = withCors(req('POST', origin), base())
-    assert.equal(r.headers.get('access-control-allow-origin'), null)
-    assert.equal(r.status, 200)
-  }
+  const own = withCors(base(), decide(req('POST', undefined)))
+  assert.equal(own.headers.get('access-control-allow-origin'), null)
+  assert.equal(own.status, 200)
 })
 
-test('the AI function wraps the UNCHANGED handler: CORS on the outside, bearer-token check, limits and server-side keys intact', () => {
-  const fn = read('netlify/functions/ai-chat.js')
-  assert.match(fn, /const early = preflight\(request\)/)
-  assert.match(fn, /return withCors\(request, await handle\(request\)\)/)
+test('the AI endpoint is native Vercel: no Netlify imports; bearer-token check, limits and server-side keys intact', () => {
+  const fn = read('api/_lib/ai/handler.js')
+  const entry = read('api/ai-chat.js')
+  assert.doesNotMatch(fn + entry, /netlify/i)
+  assert.match(entry, /export default async function handler\(req, res\)/)
+  assert.match(fn, /const early = preflight\(request, decision\)/)
   assert.match(fn, /authorization/i)
   assert.match(fn, /getUser\(/)
-  assert.match(fn, /AI_DAILY_LIMIT|dailyLimit|checkDailyLimit/)
+  assert.match(fn, /dailyLimit/)
   assert.doesNotMatch(fn, /SERVICE_ROLE|service_role/)
-  assert.doesNotMatch(fn, /Access-Control-Allow-Origin['"]?\s*[:,]\s*['"]\*/i)
-  assert.doesNotMatch(read('netlify/lib/ai/cors.js').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n'), /['"]\*['"]/, 'no wildcard origin in code (comments excluded)')
+  assert.doesNotMatch(read('api/_lib/ai/cors.js').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n'), /['"]\*['"]/, 'no wildcard origin in code (comments excluded)')
 })
 
 // ------------------------------------------------------------------------------------------------ uuid
@@ -485,7 +510,7 @@ test('Swahili has a translation for every new Android user-facing string', () =>
   }
 })
 
-test('Phase 2 adds no SQL: the three original migrations are the only ones, and no SQL file mentions the new Android code', () => {
-  assert.deepEqual(readdirSync(new URL('../supabase/migrations', import.meta.url)).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql'])
+test('migrations: the three originals plus the additive V5 file only, and no SQL file mentions the Android code', () => {
+  assert.deepEqual(readdirSync(new URL('../supabase/migrations', import.meta.url)).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql'])
   assert.deepEqual(readdirSync(new URL('../supabase', import.meta.url)).sort(), ['migrations', 'tests'])
 })

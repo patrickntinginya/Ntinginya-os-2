@@ -91,7 +91,7 @@ export async function sendToAssistant({
   if (res.status === 404) {
     throw new AiUnavailableError(
       tr(
-        'The AI service is not available here. When running locally, start the app with "npx netlify dev" instead of "npm run dev".',
+        'The AI service is not available here. When running locally, start the app with "vercel dev" instead of "npm run dev".',
       ),
     )
   }

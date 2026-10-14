@@ -1,14 +1,14 @@
-// POST /.netlify/functions/ai-chat   (GET ?status=1 reports whether an AI key is configured)
-// The AI key lives only in this function's environment. Every database read/write below uses a client that carries
+// Core of POST /api/ai-chat (GET ?status=1 reports whether an AI key is configured). Web-standard Request -> Response,
+// so it runs on Vercel (see ../../ai-chat.js) and can be unit-tested without a server.
+// The AI key lives only in the server environment. Every database read/write below uses a client that carries
 // the caller's own access token, so Row Level Security keeps each user inside their own data.
-import { createClient } from '@supabase/supabase-js'
-import { callModel, ProviderError, publicStatus, resolveProvider } from '../lib/ai/provider.js'
-import { FALLBACK_MESSAGES, providerErrorReply } from '../lib/ai/http.js'
-import { dailyLimitReached, makeBurstLimiter } from '../lib/ai/limits.js'
-import { MODES, MODE_INSTRUCTIONS, systemPrompt } from '../lib/ai/prompts.js'
-import { buildContext } from '../lib/ai/context.js'
-import { toolDefinitions, validateAction } from '../../src/lib/ai/actions.js'
-import { preflight, withCors } from '../lib/ai/cors.js'
+import { callModel, ProviderError, publicStatus, resolveProvider } from './provider.js'
+import { FALLBACK_MESSAGES, providerErrorReply } from './http.js'
+import { dailyLimitReached, makeBurstLimiter } from './limits.js'
+import { MODES, MODE_INSTRUCTIONS, systemPrompt } from './prompts.js'
+import { buildContext } from './context.js'
+import { toolDefinitions, validateAction } from '../../../src/lib/ai/actions.js'
+import { corsDecision, preflight, withCors } from './cors.js'
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const GENERIC = 'Something went wrong. Please try again.'
@@ -17,8 +17,7 @@ const failure = (code, status) => json(status, { error: code, message: FALLBACK_
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-async function handle(request) {
-  const env = process.env
+async function handle(request, env) {
   const url = new URL(request.url)
 
   if (request.method === 'GET') {
@@ -36,6 +35,7 @@ async function handle(request) {
   // 1. Who is calling? Verified by Supabase, never trusted from the request body.
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
   if (!token) return json(401, { error: 'unauthorized', message: 'Please sign in again.' })
+  const { createClient } = await import('@supabase/supabase-js') // loaded only when a real authenticated call arrives
   const client = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
@@ -58,6 +58,7 @@ async function handle(request) {
   } catch {
     return json(400, { error: 'bad_request', message: GENERIC })
   }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'bad_request', message: GENERIC })
   const lang = body.lang === 'sw' ? 'sw' : 'en'
 
   // Connection test used by Settings -> AI ("Test connection"). Tiny call, no data is read or stored.
@@ -78,7 +79,7 @@ async function handle(request) {
   const today = typeof body.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.today) ? body.today : null
   const conversationId = body.conversation_id && UUID.test(body.conversation_id) ? body.conversation_id : null
   const entityId = body.entity_id && UUID.test(body.entity_id) ? body.entity_id : null
-  if (!message || message.length > 4000 || !MODES.includes(mode) || !today || Number.isNaN(new Date(`${today}T00:00:00Z`).getTime())) {
+  if (!message || message.length > 4000 || typeof mode !== 'string' || !MODES.includes(mode) || !today || Number.isNaN(new Date(`${today}T00:00:00Z`).getTime())) {
     return json(400, { error: 'bad_request', message: 'Please check your message and try again.' })
   }
 
@@ -151,10 +152,19 @@ async function handle(request) {
   }
 }
 
-// Entry point. CORS is applied around the unchanged handler above: allowed origins only (see ../lib/ai/cors.js).
-// The handler still verifies the caller's Bearer token on every request.
-export default async (request) => {
-  const early = preflight(request)
+// Entry point. Origin policy first (see ./cors.js), then the handler above, which verifies the caller's Bearer token
+// on every request.
+export async function handleAiRequest(request, env = process.env) {
+  const decision = corsDecision(request, env)
+  const early = preflight(request, decision)
   if (early) return early
-  return withCors(request, await handle(request))
+  if (decision.blocked) return json(403, { error: 'origin_not_allowed', message: GENERIC })
+  let response
+  try {
+    response = await handle(request, env)
+  } catch (e) {
+    console.error('ai-chat unhandled:', e?.code || e?.name || 'unknown')
+    response = json(500, { error: 'server_error', message: GENERIC })
+  }
+  return withCors(response, decision)
 }

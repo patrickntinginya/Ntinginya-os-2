@@ -5,10 +5,7 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# V2: server-side AI function (keeps AI_API_KEY off the browser). Served at /.netlify/functions/ai-chat
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
+# NOTE: the AI backend now runs on Vercel (api/ai-chat.js). Netlify only serves the static site, if used at all.
 
 # Single-page app: send every route to index.html (functions under /.netlify/ are not affected)
 [[redirects]]

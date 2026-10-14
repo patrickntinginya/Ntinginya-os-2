@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { callModel, publicStatus, resolveProvider, ProviderError } from '../netlify/lib/ai/provider.js'
-import { toOpenAiTools } from '../netlify/lib/ai/providers/openai.js'
+import { callModel, publicStatus, resolveProvider, ProviderError } from '../api/_lib/ai/provider.js'
+import { toOpenAiTools } from '../api/_lib/ai/providers/openai.js'
 import { toolDefinitions } from '../src/lib/ai/actions.js'
 
 test('no provider and no key: gemini is the default but reported as not configured', () => {

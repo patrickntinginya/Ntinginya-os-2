@@ -25,7 +25,7 @@ All of these work **without AI**.
 ```
 src/i18n/                    en.js, sw.js (keyed text), sw.phrases.js (Kiswahili for English phrases), I18nContext
 src/pages, components        UI (mobile-first); src/utils = pure, tested calculation code
-netlify/functions/ai-chat.js the only server code: verifies the user, builds a data summary, calls the provider
+api/ai-chat.js (+ api/_lib/ai/) the only server code: verifies the user, builds a data summary, calls the provider
 netlify/lib/ai/providers/    gemini (default), anthropic, openai, ollama
 supabase/migrations/001-003  schema (no V4 migration);  supabase/tests/rls_isolation.sql
 tests/                       node --test

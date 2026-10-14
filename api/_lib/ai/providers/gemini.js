@@ -1,9 +1,10 @@
-// Google Gemini through the REST API (generateContent). Runs only inside the Netlify function; the key is sent in the
+// Google Gemini through the REST API (generateContent). Runs only inside the server function; the key is sent in the
 // x-goog-api-key header, never in a URL, and never returned to the browser.
 import { ProviderError, kindFromStatus } from '../errors.js'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.1-flash-lite'
+export const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash'
 export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 const SCHEMA_KEYS = ['type', 'description', 'enum', 'items', 'format', 'nullable', 'minimum', 'maximum', 'minItems', 'maxItems']
@@ -42,6 +43,7 @@ export const gemini = {
   modelEnv: 'GEMINI_MODEL',
   needsKey: true,
   defaultModel: GEMINI_DEFAULT_MODEL,
+  fallbackModel: GEMINI_FALLBACK_MODEL,
   // Gemini 3 models may spend output tokens on internal thinking, so the default budget is larger.
   defaultMaxTokens: 2048,
   async call({ apiKey, model, maxTokens, system, messages, tools, signal }) {

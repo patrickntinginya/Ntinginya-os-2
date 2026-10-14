@@ -45,7 +45,9 @@ export function resolveProvider(env = process.env) {
   if (impl.needsKey && !apiKey) return { ...base, status: 'not_configured', configured: false, missing: impl.keyEnv || 'AI_API_KEY' }
   if (impl.needsBaseUrl && !baseUrl) return { ...base, status: 'not_configured', configured: false, missing: 'AI_BASE_URL' }
   if (name === 'gemini' && !MODEL_PATTERN.test(model)) return { ...base, status: 'not_configured', configured: false, missing: 'GEMINI_MODEL' }
-  return { ...base, status: 'ready', configured: true, model, apiKey, baseUrl }
+  // Only when the owner did not choose a model: allow one retry with a widely available model if the default is rejected.
+  const fallbackModel = name === 'gemini' && !env.GEMINI_MODEL && impl.fallbackModel ? impl.fallbackModel : undefined
+  return { ...base, status: 'ready', configured: true, model, apiKey, baseUrl, ...(fallbackModel ? { fallbackModel } : {}) }
 }
 
 /** Only these fields are safe to send to the browser. `missing` is a variable NAME, never a value. */
@@ -63,10 +65,16 @@ export async function callModel(cfg, { system, messages, tools, timeoutMs = 2400
   if (cfg.status !== 'ready') throw new ProviderError('not_ready')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const run = (model) => PROVIDERS[cfg.name].call({
+    apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model, maxTokens: maxTokens || cfg.maxTokens, system, messages, tools, signal: controller.signal,
+  })
   try {
-    return await PROVIDERS[cfg.name].call({
-      apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model, maxTokens: maxTokens || cfg.maxTokens, system, messages, tools, signal: controller.signal,
-    })
+    try {
+      return await run(cfg.model)
+    } catch (e) {
+      if (e instanceof ProviderError && e.kind === 'model' && cfg.fallbackModel) return await run(cfg.fallbackModel)
+      throw e
+    }
   } finally {
     clearTimeout(timer)
   }
