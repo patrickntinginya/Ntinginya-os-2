@@ -7,7 +7,7 @@ name: Android debug APK
 on:
   workflow_dispatch:
   push:
-    branches: [Android-V1]
+    branches: [Android-V1, v5-build-check]
 
 permissions:
   contents: read
