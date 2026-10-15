@@ -72,6 +72,12 @@ jobs:
         run: |
           if [ ! -d android ]; then npx cap add android; fi
 
+      - name: Generate branded Android launcher icons
+        run: |
+          mkdir -p assets
+          cp public/pwa-512.png assets/icon.png
+          npx --yes --package @capacitor/assets capacitor-assets generate --android
+
       - name: Copy web build into the Android project
         run: npx cap sync android
 
