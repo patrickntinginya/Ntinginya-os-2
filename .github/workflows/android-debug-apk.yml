@@ -1,0 +1,98 @@
+# Builds an UNSIGNED DEBUG APK and uploads it as a workflow artifact.
+# - Runs only on the Android-V1 branch or when started by hand. It never runs for main.
+# - No signing keys, keystores or passwords are used. Release signing is a later phase.
+# STATUS: written but NOT yet run on GitHub. Action versions and the Gradle build are unverified until the first run.
+name: Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [Android-V1, v5-build-check]
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Public values the web app already needs. The anon key is designed to be public; access control is Row Level Security.
+      # NEVER put a service-role key or any AI key here.
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # Public address of the deployed backend that serves /api/ai-chat (an https origin, no path). It is a URL, not a secret,
+      # so it is a repository VARIABLE. Without it the app builds fine but the AI Assistant reports "not set up" on Android.
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Capacitor 7 needs JDK 21 to build the Android project.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      
+      - name: Set up Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Check required secrets are set
+        run: |
+          test -n "$VITE_SUPABASE_URL" || { echo "Missing GitHub secret VITE_SUPABASE_URL"; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "Missing GitHub secret VITE_SUPABASE_ANON_KEY"; exit 1; }
+
+      - name: Warn if the AI backend address is not configured
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then echo "::warning::Repository variable VITE_API_BASE_URL is not set. The Android AI Assistant will report that it is not set up."; fi
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+
+      - name: Run existing tests
+        run: npm test
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Generate the Android project if it is not committed
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+
+      - name: Generate branded Android launcher icons
+        run: |
+          mkdir -p assets
+          cp public/pwa-512.png assets/icon.png
+          npx --yes --package @capacitor/assets capacitor-assets generate --android
+
+      - name: Copy web build into the Android project
+        run: npx cap sync android
+
+      - name: Apply deep links and permissions to the generated manifest
+        run: node scripts/android-configure.mjs
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-life-os-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
