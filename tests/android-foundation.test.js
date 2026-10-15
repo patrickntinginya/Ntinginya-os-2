@@ -62,5 +62,5 @@ test('keystores and Android build output are git-ignored', () => {
 })
 
 test('the three original migrations keep their names; V5 adds exactly one additive file (004_v5.sql)', () => {
-  assert.deepEqual(fs.readdirSync(path.join(root, 'supabase/migrations')).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql'])
+  assert.deepEqual(fs.readdirSync(path.join(root, 'supabase/migrations')).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql', '005_safe_mode_media.sql'])
 })

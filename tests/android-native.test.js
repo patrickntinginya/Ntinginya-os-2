@@ -511,6 +511,6 @@ test('Swahili has a translation for every new Android user-facing string', () =>
 })
 
 test('migrations: the three originals plus the additive V5 file only, and no SQL file mentions the Android code', () => {
-  assert.deepEqual(readdirSync(new URL('../supabase/migrations', import.meta.url)).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql'])
+  assert.deepEqual(readdirSync(new URL('../supabase/migrations', import.meta.url)).sort(), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql', '005_safe_mode_media.sql'])
   assert.deepEqual(readdirSync(new URL('../supabase', import.meta.url)).sort(), ['migrations', 'tests'])
 })

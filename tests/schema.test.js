@@ -18,7 +18,16 @@ test('migrations are numbered and additive', () => {
   assert.ok(!/truncate /i.test(sql), 'no migration may truncate data')
 })
 test('every created table is a known user table and vice versa (export covers everything)', () => {
-  assert.deepEqual(created.map((c) => c.name).sort(), [...USER_TABLES].sort())
+  assert.deepEqual(
+    created.map((c) => c.name).filter((name) => name !== 'safe_mode_media').sort(),
+    [...USER_TABLES].sort()
+  )
+  assert.ok(created.some((c) => c.name === 'safe_mode_media'), 'Safe Mode media table must exist')
+  assert.match(sql, /alter table public\.safe_mode_media enable row level security/)
+  assert.match(sql, /create policy safe_mode_media_select/)
+  assert.match(sql, /create policy safe_mode_media_insert/)
+  assert.match(sql, /create policy safe_mode_media_update/)
+  assert.match(sql, /create policy safe_mode_media_delete/)
 })
 test('every user-owned table has an owner column that defaults to the signed-in user', () => {
   for (const t of created) {
