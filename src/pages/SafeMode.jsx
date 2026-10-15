@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowUpRight, Image as ImageIcon, Music2, ShieldCheck, Sparkles, Trash2, UploadCloud, Video } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import SafeModeSupport from '../components/SafeModeSupport'
 
 const BUCKET = 'safe-mode-media'
 const MAX_BYTES = 50 * 1024 * 1024
@@ -91,6 +92,7 @@ export default function SafeMode() {
       <div className="flex items-start gap-3"><span className="rounded-xl bg-white/15 p-3"><ShieldCheck size={26} aria-hidden="true" /></span><div><h1 className="text-2xl font-bold tracking-tight">{c.headerTitle}</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/90">{c.headerSubtitle}</p></div></div>
       <div className="mt-5 grid gap-3 sm:grid-cols-3"><Link to="/motivation" className="flex min-h-[52px] items-center justify-between gap-2 rounded-xl bg-white/10 px-4 py-3 font-medium hover:bg-white/20"><span className="flex items-center gap-2"><Sparkles size={18} />{c.motivation}</span><ArrowUpRight size={17} /></Link><Link to="/calm" className="flex min-h-[52px] items-center justify-between gap-2 rounded-xl bg-white/10 px-4 py-3 font-medium hover:bg-white/20"><span className="flex items-center gap-2"><ShieldCheck size={18} />{c.calm}</span><ArrowUpRight size={17} /></Link><Link to="/reflections" className="flex min-h-[52px] items-center justify-between gap-2 rounded-xl bg-white/10 px-4 py-3 font-medium">{c.reflections}<ArrowUpRight size={17} /></Link></div>
     </header>
+    <SafeModeSupport />
     <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-surface-dark sm:p-5">
       <h2 className="text-lg font-semibold">{c.library}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{c.libraryHint}</p>{isAdmin && <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{c.adminNotice}</p>}
       <form onSubmit={upload} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
