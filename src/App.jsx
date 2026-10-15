@@ -26,6 +26,7 @@ import Insights from './pages/Insights'
 import Reviews from './pages/Reviews'
 import Motivation from './pages/Motivation'
 import Calm from './pages/Calm'
+import SafeMode from './pages/SafeMode'
 import Reflections from './pages/Reflections'
 import AiAssistant from './pages/AiAssistant'
 import SearchPage from './pages/SearchPage'
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/reviews/:kind" element={<Reviews />} />
             <Route path="/motivation" element={<Motivation />} />
             <Route path="/calm" element={<Calm />} />
+            <Route path="/safe-mode" element={<SafeMode />} />
             <Route path="/reflections" element={<Reflections />} />
             <Route path="/ai" element={<AiAssistant />} />
             <Route path="/ai-assistant" element={<Navigate to="/ai" replace />} />

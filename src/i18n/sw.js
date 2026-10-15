@@ -110,6 +110,7 @@ export default {
   'common.delete': 'Futa',
   'common.loading': 'Inapakia...',
   'nav.motivation': 'Hamasa',
+  'nav.safeMode': 'Hali Salama',
   'nav.reflections': 'Tafakari',
   'nav.calm': 'Utulivu / Kupumzika',
   'mot.title': 'Kituo cha Hamasa na Kurejea Upya',

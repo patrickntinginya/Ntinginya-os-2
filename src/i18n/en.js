@@ -115,6 +115,7 @@ export default {
   'common.delete': 'Delete',
   'common.loading': 'Loading...',
   'nav.motivation': 'Motivation',
+  'nav.safeMode': 'Safe Mode',
   'nav.reflections': 'Reflections',
   'nav.calm': 'Calm / Pause',
   'mot.title': 'Motivation & Recovery Center',
