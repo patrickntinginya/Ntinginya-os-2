@@ -50,6 +50,7 @@ export default defineConfig({
       },
 
       workbox: {
+        mode: 'development',
         navigateFallback: '/index.html',
 
         // Avoid using the app shell for API and server routes.
