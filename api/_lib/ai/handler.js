@@ -67,9 +67,14 @@ async function handle(request, env) {
     try {
       await callModel(cfg, { system: 'Reply with the single word: ok', messages: [{ role: 'user', content: 'ping' }], maxTokens: 64, timeoutMs: 15000 })
       return json(200, { ok: true })
-    } catch (e) {
+        } catch (e) {
       const r = providerErrorReply(e)
-      console.error('ai-chat ping failed:', e?.kind || 'unknown')
+      console.error('ai-chat ping failed:', {
+        code: /^provider_status_\d+$/.test(e?.message || '')
+          ? e.message
+          : 'non_http_provider_error',
+        kind: e?.kind || 'unknown',
+      })
       return failure(r.error, r.status)
     }
   }
