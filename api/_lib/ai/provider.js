@@ -71,8 +71,16 @@ export async function callModel(cfg, { system, messages, tools, timeoutMs = 2400
   try {
     try {
       return await run(cfg.model)
-    } catch (e) {
-      if (e instanceof ProviderError && e.kind === 'model' && cfg.fallbackModel) return await run(cfg.fallbackModel)
+        } catch (e) {
+      const canFallback =
+        e instanceof ProviderError &&
+     ['model', 'server'].includes(e.kind) &&
+        cfg.fallbackModel
+
+      if (canFallback) {
+        return await run(cfg.fallbackModel)
+      }
+
       throw e
     }
   } finally {

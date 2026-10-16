@@ -129,6 +129,25 @@ test('Gemini: when the default model is rejected (404) and GEMINI_MODEL is unset
   assert.notEqual(urls[0], urls[1])
 })
 
+test('Gemini: a 503 server error tries the fallback model', async () => {
+  const cfg = resolveProvider({ GEMINI_API_KEY: 'k' })
+  const urls = []
+
+  const out = await withFetch(async (u) => {
+    urls.push(String(u))
+    return urls.length === 1
+      ? new Response('{}', { status: 503 })
+      : ok('hello')
+  }, () => callModel(cfg, {
+    system: 's',
+    messages: [{ role: 'user', content: 'x' }],
+  }))
+
+  assert.equal(out.text, 'hello')
+  assert.equal(urls.length, 2)
+  assert.notEqual(urls[0], urls[1])
+})
+
 test('Gemini: an explicit GEMINI_MODEL is never silently replaced', async () => {
   const cfg = resolveProvider({ GEMINI_API_KEY: 'k', GEMINI_MODEL: 'my-model' })
   let n = 0
