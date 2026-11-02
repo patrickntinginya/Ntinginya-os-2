@@ -1,0 +1,19 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# NOTE: the AI backend now runs on Vercel (api/ai-chat.js). Netlify only serves the static site, if used at all.
+
+# Single-page app: send every route to index.html (functions under /.netlify/ are not affected)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
