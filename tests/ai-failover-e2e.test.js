@@ -15,13 +15,14 @@ const USER = { id: 'u1', app_metadata: {}, user_metadata: {} }
 let seq = 0 // each request is a different user so the per-user burst limiter (8/min) does not interfere with the tests
 
 // Recording stand-in for the Supabase client: every query chain resolves; inserts are recorded.
-function fakeClient(rec) {
+function fakeClient(rec, options = {}) {
   const make = (table) => {
+    rec.queries.push(table)
     const st = { table, op: 'select', head: false, one: false }
     const result = () => {
       if (st.op === 'insert') return { data: table === 'ai_conversations' ? { id: CONV } : table === 'ai_action_requests' ? [] : null, error: null }
       if (st.op === 'update') return { data: null, error: null }
-      if (table === 'profiles') return { data: { ai_enabled: true }, error: null }
+      if (table === 'profiles') return { data: options.profileData === undefined ? { ai_enabled: true } : options.profileData, error: options.profileError || null }
       if (table === 'ai_messages' && st.head) return { data: null, count: 0, error: null }
       if (table === 'ai_messages') return { data: [{ role: 'assistant', content: 'Nzuri!' }, { role: 'user', content: 'Habari' }], error: null } // newest first, like the real query
       if (table === 'ai_conversations') return { data: { id: CONV }, error: null }
@@ -41,7 +42,18 @@ function fakeClient(rec) {
     })
     return p
   }
-  return { from: make }
+  return {
+    from: make,
+    async rpc(name) {
+      rec.rpcs.push(name)
+      if (name === 'consume_ai_request') {
+        if (options.usageThrows) throw options.usageThrows
+        if (options.usageError) return { data: null, error: options.usageError }
+        return { data: options.usageData || [{ allowed: true, reason: null }], error: null }
+      }
+      return { data: [], error: null }
+    },
+  }
 }
 
 const geminiOk = (text) => ({ status: 200, body: { candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }] } })
@@ -50,8 +62,8 @@ const status = (s, headers = {}) => ({ status: s, body: { error: { message: 'PRO
 const abort = () => ({ throws: Object.assign(new Error('aborted'), { name: 'AbortError' }) })
 
 /** Runs one POST /api/ai-chat with scripted provider behaviour. script.gemini / script.openrouter: steps consumed in order. */
-async function ask({ env = ENV, script = {}, body = {}, health = createHealthMonitor(), user = USER } = {}) {
-  const rec = { inserts: [], calls: [] }
+async function ask({ env = ENV, script = {}, body = {}, health = createHealthMonitor(), user = USER, clientOptions = {} } = {}) {
+  const rec = { inserts: [], calls: [], queries: [], rpcs: [] }
   const real = globalThis.fetch
   globalThis.fetch = async (url, init) => {
     const which = String(url).includes('generativelanguage.googleapis.com') ? 'gemini' : String(url).includes('openrouter.ai') ? 'openrouter' : 'other'
@@ -68,7 +80,7 @@ async function ask({ env = ENV, script = {}, body = {}, health = createHealthMon
       body: JSON.stringify({ message: 'Nipe mpango wa wiki', mode: 'chat', today: '2026-10-30', lang: 'sw', conversation_id: CONV, ...body }),
     })
     const deps = {
-      authenticate: async () => ({ client: fakeClient(rec), user: { ...user, id: `user-${++seq}` } }),
+      authenticate: async () => ({ client: fakeClient(rec, clientOptions), user: { ...user, id: `user-${++seq}` } }),
       health,
       logger: () => {},
       route: (e, req, opts) => routeModel(e, req, { ...opts, sleep: async () => {}, random: () => 0 }), // no real waiting in tests
@@ -80,6 +92,67 @@ async function ask({ env = ENV, script = {}, body = {}, health = createHealthMon
 }
 const messageInserts = (rec) => rec.inserts.filter((i) => i.table === 'ai_messages')
 const assertSafe = (text) => { for (const secret of [G, O, 'PROVIDER-DETAIL-MUST-NOT-LEAK']) assert.ok(!text.includes(secret), `leaked ${secret}`) }
+
+test('AI disabled, missing profile, and profile read errors fail closed before provider calls', async () => {
+  const disabled = await ask({ clientOptions: { profileData: { ai_enabled: false } } })
+  assert.equal(disabled.res.status, 403)
+  assert.equal(disabled.rec.rpcs.length, 0)
+  assert.equal(disabled.rec.calls.length, 0)
+
+  for (const clientOptions of [
+    { profileData: null },
+    { profileData: { ai_enabled: null } },
+    { profileError: new Error('profile lookup unavailable') },
+  ]) {
+    const unavailable = await ask({ clientOptions })
+    assert.equal(unavailable.res.status, 503)
+    assert.equal(unavailable.json.error, 'ai_settings_unavailable')
+    assert.equal(unavailable.rec.rpcs.length, 0)
+    assert.equal(unavailable.rec.calls.length, 0)
+  }
+})
+
+test('usage database errors, malformed replies, and quota rejections prevent provider calls', async () => {
+  const unavailableCases = [
+    { usageError: new Error('database unavailable') },
+    { usageThrows: new Error('RPC failed') },
+    { usageData: [{ allowed: 'yes' }] },
+    { usageData: [] },
+  ]
+  for (const clientOptions of unavailableCases) {
+    const unavailable = await ask({ clientOptions })
+    assert.equal(unavailable.res.status, 503)
+    assert.equal(unavailable.json.error, 'usage_limit_unavailable')
+    assert.equal(unavailable.rec.calls.length, 0)
+  }
+
+  for (const reason of ['daily_limit', 'burst_limit']) {
+    const limited = await ask({ clientOptions: { usageData: [{ allowed: false, reason }] } })
+    assert.equal(limited.res.status, 429)
+    assert.equal(limited.json.error, reason)
+    assert.equal(limited.rec.calls.length, 0)
+  }
+})
+
+test('personal context is not queried by default and only selected categories are sent', async () => {
+  const defaultRequest = await ask()
+  const privateTables = ['tasks', 'reminders', 'schedule_events', 'goals', 'milestones', 'projects', 'habits', 'habit_entries', 'learning_items', 'study_sessions', 'budgets', 'financial_goals', 'income', 'expenses', 'ideas']
+  assert.equal(defaultRequest.res.status, 200)
+  assert.equal(privateTables.some((table) => defaultRequest.rec.queries.includes(table)), false)
+  const defaultConversation = JSON.stringify(defaultRequest.rec.calls[0].body.contents)
+  assert.ok(!defaultConversation.includes('<user_data>'))
+
+  const selectedRequest = await ask({ body: { context_categories: ['tasks', 'malicious_category'] } })
+  assert.equal(selectedRequest.res.status, 200)
+  assert.ok(selectedRequest.rec.queries.includes('tasks'))
+  assert.ok(selectedRequest.rec.queries.includes('reminders'))
+  assert.equal(selectedRequest.rec.queries.includes('income'), false)
+  assert.equal(selectedRequest.rec.queries.includes('budgets'), false)
+  const selectedUserTurn = JSON.stringify(selectedRequest.rec.calls[0].body.contents)
+  assert.match(selectedUserTurn, /<user_data>/)
+  assert.ok(selectedUserTurn.includes('tasks'))
+  assert.ok(!selectedUserTurn.includes('finance'))
+})
 
 test('primary success: Gemini answers, OpenRouter is never contacted, one exchange is stored', async () => {
   const r = await ask()

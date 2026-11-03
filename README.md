@@ -1,70 +1,78 @@
-# Personal Life OS - V4
+# Ntinginya Life Ecosystem V6
 
-One system for time, tasks, goals, projects, money, learning, notes, ideas and habits. React + Vite + Tailwind +
-Supabase (auth, Postgres, Row Level Security) + PWA on Netlify. Money is in **Tanzanian Shillings** (stored as numeric,
-shown as `TSh 1,500,000`). The interface is available in **Kiswahili and English**.
+Ntinginya Life Ecosystem is a React single-page application built with Vite,
+Supabase, and Capacitor. It brings personal planning and community features
+together in a responsive web interface with an Android app shell.
 
-> **Verification status.** Written without access to the npm registry or a database. **Run so far:** `npm test`
-> (168 tests, all passing) and a script that checks every file parses and every import resolves. **Not run yet:**
-> `npm install`, `npm run build`, `npm run preview`, a Netlify deploy, a real Gemini call, the PWA install, and any screen
-> in a browser. Do those first (docs/V4_SETUP.md). V4 is **not** declared complete until they pass.
+## Project features
 
-## What V4 added
-- Kiswahili / English switch (top bar, sidebar, login screens), Kiswahili by default, saved on the device.
-- A highlighted **AI Assistant** entry in the sidebar and the phone bottom bar.
-- **Gemini** as the default AI provider (server-side only), with a provider layer that still supports Anthropic, OpenAI and Ollama.
-- Settings -> AI: provider, model, daily limit, status, on/off, Test connection. Friendly quota/timeout/server errors in both languages.
-- Language-aware AI answers; bilingual offline message; accessibility and touch-target tests.
-
-## Everything from V3 and V2 is kept
-Life Score, daily briefing, habits, Today/Planner/Schedule, tasks, goals -> projects -> tasks, finance (budgets, savings, recurring,
-forecast, "Can I afford this?"), notes, ideas, learning, search, notifications (in-app), reviews, insights, data export, account deletion.
-All of these work **without AI**.
+- Authentication and user profiles using the existing Supabase Auth setup.
+- Dashboard, tasks, reminders, habits, goals, finance, and notification tools.
+- Community posts, groups, comments, reactions, and moderation.
+- Live chat, voice messages, and an offline media library.
+- Safe Mode media restrictions and in-app YouTube playback.
+- Professionals Marketplace, service listings, free appointment requests, and
+  administrative review workflows. Payments, commissions, and payouts are not
+  part of the current booking flow.
+- AI chat through the server-side provider router, including Gemini and
+  OpenRouter configuration and failover.
+- English and Kiswahili translations.
 
 ## Architecture
+
+- `src/`: React UI, routes, layouts, services, hooks, and translations.
+- `api/`: server-side AI API and provider routing.
+- `supabase/migrations/`: additive database migrations, currently numbered
+  001–018.
+- `supabase/tests/`: SQL checks for database permissions and feature rules.
+- `tests/`: Node.js automated tests.
+- `android/` and Capacitor configuration: Android app integration.
+
+The browser client uses the shared Supabase client in `src/lib/supabase.js`.
+AI provider credentials belong in the server environment and must not be
+exposed through client-side `VITE_` variables.
+
+## Local development
+
+Install dependencies using the repository lockfile, then run:
+
+```sh
+npm run dev
 ```
-src/i18n/                    en.js, sw.js (keyed text), sw.phrases.js (Kiswahili for English phrases), I18nContext
-src/pages, components        UI (mobile-first); src/utils = pure, tested calculation code
-api/ai-chat.js (+ api/_lib/ai/) the only server code: verifies the user, builds a data summary, calls the provider
-netlify/lib/ai/providers/    gemini (default), anthropic, openai, ollama
-supabase/migrations/001-003  schema (no V4 migration);  supabase/tests/rls_isolation.sql
-tests/                       node --test
-```
 
-## Environment variables
-| Variable | Where | Purpose |
-|---|---|---|
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | browser | Supabase project (anon key only) |
-| `AI_PROVIDER` | server | `gemini` (default), `anthropic`, `openai`, `ollama`, `none` |
-| `GEMINI_API_KEY` | server | Google Gemini key. Never `VITE_`-prefixed |
-| `GEMINI_MODEL` | server | optional model ID; default `gemini-3.1-flash-lite` (see docs for caveat) |
-| `AI_MAX_TOKENS`, `AI_DAILY_LIMIT` | server | optional output and per-user daily limits |
-| `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | server | only for the other providers |
+For isolated local Supabase setup, requirements, service URLs, and migration
+behavior, see [docs/LOCAL_SUPABASE.md](docs/LOCAL_SUPABASE.md). Supabase CLI
+startup can apply project migrations when initializing its local database; do
+not assume that `supabase start` is migration-free.
 
-## Setup, deploy, PWA
-See **docs/V4_SETUP.md** (beginner guide). Deploy to your existing Netlify site: push the code, add the variables, redeploy. No new site and no new migration.
-Install on Android from Chrome: menu -> Install app. Only the app shell is cached; data needs internet. It is a PWA, not an APK.
+## Verification status
 
-## AI and no-AI mode
-Without `GEMINI_API_KEY` the app does not crash: AI screens say "AI haijaunganishwa" / "AI not configured" and every rule-based feature keeps working. No fake AI answers are ever shown.
-The AI can only **propose** actions; each needs your **Confirm**, and it cannot delete data, move money or send messages.
-Gemini use is "subject to Google's current API quotas and pricing"; nothing here promises free or unlimited AI.
+Recorded automated results (not rerun as part of this documentation update):
 
-## Security
-Row Level Security on every user table; a database trigger blocks links to another user's records; the AI function uses the caller's own token;
-no service-role key exists in the project; the Gemini key is read only in server provider code and sent in a request header, never to the browser;
-tests scan the code for VITE_ AI variables and key patterns.
+- The last recorded full JavaScript test run passed **575 tests**. A later
+  focused date/time regression run passed **10/10**; the full suite was not
+  rerun after that additional test.
+- Focused Marketplace tests passed **15/15**.
+- A focused Community, Live Chat, Voice Messages, Offline Media, and Safe Mode
+  run passed **143/143**.
+- The production build passed in the latest recorded integration verification.
+- The isolated disposable PostgreSQL harness applied migrations **001–018**
+  and reported **222 PASS, 0 FAIL**. This harness uses PostgreSQL with local
+  Supabase stand-ins; it is not a hosted Supabase test.
+- Migration 018 changes the professional reference on appointments to
+  `ON DELETE RESTRICT`, preventing deletion of a professional account while
+  appointment records still reference it.
 
-## Testing
-`npm test` runs 168 tests, including: Kiswahili/English catalogues and placeholder parity, every UI phrase translated, language persistence,
-AI button visibility, Gemini selection / missing key / errors / rate limits, AI action safety, secret protection, mobile navigation and PWA configuration.
-Database isolation must be tested by you with `supabase/tests/rls_isolation.sql`.
+These results are separate runs and should not be added together. The local
+Supabase CLI startup is a separate outcome: it applied migrations 001–017 to
+the local database but exited with code 1, and Studio was not available at the
+last inspection. The successful disposable PostgreSQL harness does not mean
+that the CLI stack startup succeeded.
 
-## Known limitations
-- Not built, deployed or run in the authoring environment (see top).
-- The language choice is per device (browser storage), not per account.
-- Kiswahili wording was written without native-speaker review; please proofread `src/i18n/`.
-- The default Gemini model ID comes from Google's current documentation and may change; set `GEMINI_MODEL` if needed.
-- Netlify's default function timeout may be shorter than the 24 s the function waits for Gemini.
-- No push notifications (in-app only; device alerts only while the app is open). No lint tool is configured.
-- Dynamic user content (your own task titles, notes, names) is shown exactly as you typed it, not translated.
+**Outstanding verification:** interactive browser testing, physical Android
+device testing, and hosted Supabase/production behavior. No production
+deployment or production database verification is claimed.
+
+For detailed database-test scope and limitations, see
+[docs/DATABASE_VALIDATION.md](docs/DATABASE_VALIDATION.md). For the Community
+and Smart Action Center implementation notes, see [docs/SLICE1.md](docs/SLICE1.md).

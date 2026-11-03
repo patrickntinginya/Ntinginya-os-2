@@ -15,6 +15,7 @@ import Tasks from './pages/Tasks'
 import Schedule from './pages/Schedule'
 import Finance from './pages/Finance'
 import Community from './pages/Community'
+import Marketplace from './pages/Marketplace'
 import Goals from './pages/Goals'
 import Projects from './pages/Projects'
 import Brainstorm from './pages/Brainstorm'
@@ -60,6 +61,9 @@ export default function App() {
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/finance" element={<Finance />} />
             <Route path="/community" element={<Community />} />
+            <Route path="/marketplace" element={<Marketplace />} />
+            <Route path="/marketplace/professionals/:professionalId" element={<Marketplace />} />
+            <Route path="/marketplace/services/:serviceId" element={<Marketplace />} />
             <Route path="/goals" element={<Goals />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/brainstorm" element={<Brainstorm />} />

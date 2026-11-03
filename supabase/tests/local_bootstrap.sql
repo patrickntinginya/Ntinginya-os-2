@@ -1,4 +1,4 @@
--- Minimal stand-ins for the parts of Supabase that the migrations rely on, so migrations 001-009 and the RLS tests can run on a
+-- Minimal stand-ins for the parts of Supabase that the migrations rely on, so migrations 001-018 and the RLS tests can run on a
 -- PLAIN, DISPOSABLE PostgreSQL 15+ server (Docker). NEVER run this against a Supabase project: Supabase already provides all of it.
 -- Provided here: roles anon/authenticated/service_role, auth.users, auth.uid(), auth.jwt(), storage.buckets, storage.objects, storage.foldername().
 -- These mirror Supabase's documented behaviour; the real platform remains the final authority (see docs/DATABASE_VALIDATION.md).

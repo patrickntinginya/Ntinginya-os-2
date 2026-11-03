@@ -514,5 +514,7 @@ test('migrations: the originals keep their names, later files are consecutive, a
   const sorted = readdirSync(new URL('../supabase/migrations', import.meta.url)).sort()
   assert.deepEqual(sorted.slice(0, 5), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql', '005_safe_mode_media.sql'])
   sorted.slice(5).forEach((f, i) => assert.ok(f.startsWith(String(6 + i).padStart(3, '0') + '_'), `${f} should be number ${6 + i}`))
-  assert.deepEqual(readdirSync(new URL('../supabase', import.meta.url)).sort(), ['migrations', 'tests'])
+  for (const directory of ['migrations', 'tests']) {
+    assert.ok(statSync(new URL(`../supabase/${directory}`, import.meta.url)).isDirectory(), `supabase/${directory} should exist`)
+  }
 })

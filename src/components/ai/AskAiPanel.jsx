@@ -4,13 +4,14 @@ import { Sparkles } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import AiActionCard from './AiActionCard'
+import AiContextSelector from './AiContextSelector'
 import { AiError, AiNotConfiguredError, sendToAssistant } from '../../services/aiClient'
 import { friendlyError } from '../../utils/format'
 import { tr } from '../../i18n'
 
 /**
  * One-tap or one-question AI helper used across the app (reviews, idea validator, goal coach, learning coach...).
- * It calls the server-side function; the answer is based on the user's real data and any proposed change
+ * It calls the server-side function; the answer can use only personal data categories the user selects, and any proposed change
  * appears as a card that needs Confirm. Nothing is generated until the user presses the button.
  */
 export default function AskAiPanel({
@@ -18,6 +19,7 @@ export default function AskAiPanel({
   inputLabel, inputPlaceholder, disclaimer, onResult, onActionChanged, className = '',
 }) {
   const [input, setInput] = useState('')
+  const [contextCategories, setContextCategories] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notConfigured, setNotConfigured] = useState(false)
@@ -31,7 +33,7 @@ export default function AskAiPanel({
     setError(null)
     setNotConfigured(false)
     try {
-      const res = await sendToAssistant({ message, mode, entityId })
+      const res = await sendToAssistant({ message, mode, entityId, contextCategories })
       setResult(res)
       onResult?.(res)
     } catch (err) {
@@ -51,6 +53,7 @@ export default function AskAiPanel({
       {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
 
       <form onSubmit={ask} className="mt-3 space-y-3">
+        <AiContextSelector categories={contextCategories} onChange={setContextCategories} />
         {inputLabel && (
           <div>
             <label htmlFor={`ai-${mode}`} className="label">{inputLabel}</label>

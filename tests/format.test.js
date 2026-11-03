@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { formatMoney, formatCompact, friendlyError, DEFAULT_CURRENCY } from '../src/utils/format.js'
+import { formatMoney, formatCompact, friendlyError, DEFAULT_CURRENCY, toDateTimeLocal } from '../src/utils/format.js'
 
 test('default currency is TZS', () => assert.equal(DEFAULT_CURRENCY, 'TZS'))
 
@@ -24,6 +24,18 @@ test('compact axis labels', () => {
   assert.equal(formatCompact(1500000), '1.5M')
   assert.equal(formatCompact(250000), '250K')
   assert.equal(formatCompact(900), '900')
+})
+
+test('datetime-local formatting preserves local wall-clock time', () => {
+  const date = new Date('2025-03-08T12:34:00.000Z')
+  const expected = [
+    String(date.getFullYear()).padStart(4, '0'),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-') + `T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+
+  assert.equal(toDateTimeLocal(date), expected)
+  assert.equal(toDateTimeLocal(new Date(Number.NaN)), '')
 })
 
 test('raw database errors are never shown', () => {

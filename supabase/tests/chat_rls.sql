@@ -1,6 +1,6 @@
--- Live chat permission test (migration 010). Run AFTER migrations 001-010 (scripts/verify-db.sh does this on a disposable Postgres).
+-- Live chat and voice permission test (migrations 010, 011, 013, 015). Run AFTER migrations 001-015.
 -- Everything is rolled back at the end. Expected: only PASS notices and a final "0 failures". Any FAIL means do not go live.
--- STATUS: written and statically reviewed, NOT yet executed (the build sandbox has no Postgres).
+-- Also run by scripts/verify-db.sh against a fresh disposable local PostgreSQL database.
 begin;
 do $$
 declare
@@ -190,12 +190,17 @@ begin
   reset role; perform set_config('request.jwt.claims', cadm, true); set local role authenticated;
   select count(*) into cnt from storage.objects where bucket_id = 'chat-media'; if cnt = 0 then raise notice 'PASS: the administrator cannot read any chat attachment'; else fails := fails + 1; raise notice 'FAIL: administrator reads % chat files', cnt; end if;
 
-  -- voice limits enforced by the database (migration 011). Sent into the GROUP: B blocked A, which only stops the direct chat.
+  -- voice limits enforced by the database (migrations 011 and 015). Sent into the GROUP: B blocked A, which only stops the direct chat.
+  reset role;
+  insert into storage.objects (bucket_id, name, owner, metadata)
+    values ('chat-media', u_b::text || '/' || gid::text || '/v.webm', u_b, '{"size":40000,"mimetype":"audio/webm"}');
+  perform set_config('request.jwt.claims', cb, true);
+  set local role authenticated;
   reset role; perform set_config('request.jwt.claims', cb, true); set local role authenticated;
   begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size, duration_ms) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.webm', 'v.webm', 'audio/webm', 1000, 400000); fails := fails + 1; raise notice 'FAIL: a 400 s voice message was accepted'; exception when check_violation then raise notice 'PASS: voice messages longer than 5 minutes are rejected by the database'; end;
   begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size, duration_ms) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.webm', 'v.webm', 'audio/webm', 6000000, 1000); fails := fails + 1; raise notice 'FAIL: a 6 MB voice message was accepted'; exception when check_violation then raise notice 'PASS: voice messages over 5 MB are rejected'; end;
   begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.webm', 'v.webm', 'audio/webm', 1000); fails := fails + 1; raise notice 'FAIL: a voice message without a duration was accepted'; exception when check_violation then raise notice 'PASS: a voice message must state its duration'; end;
-  begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size, duration_ms) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.png', 'v.png', 'image/png', 1000, 1000); fails := fails + 1; raise notice 'FAIL: a "voice" message with an image type was accepted'; exception when check_violation then raise notice 'PASS: a voice message must be audio'; end;
+  begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size, duration_ms) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.png', 'v.png', 'image/png', 1000, 1000); fails := fails + 1; raise notice 'FAIL: a "voice" message with an image type was accepted'; exception when check_violation or sqlstate '22023' then raise notice 'PASS: a voice message must be audio'; end;
   begin insert into public.chat_messages (conversation_id, kind, media_path, media_name, media_mime, media_size, duration_ms) values (gid, 'voice', u_b::text || '/' || gid::text || '/v.webm', 'v.webm', 'audio/webm', 40000, 12000); raise notice 'PASS: a normal 12 s voice message is accepted'; exception when others then fails := fails + 1; raise notice 'FAIL: a valid voice message was rejected (%)', sqlerrm; end;
   reset role;
 

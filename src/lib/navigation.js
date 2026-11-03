@@ -1,5 +1,5 @@
 import {
-  Home, Sun, CalendarClock, CalendarDays, CheckSquare, Wallet, Target, FolderKanban, Lightbulb, Repeat,
+  Home, Sun, CalendarClock, CalendarDays, CheckSquare, Wallet, Target, FolderKanban, Lightbulb, Repeat, BriefcaseBusiness,
   BookOpen, StickyNote, Users, Heart, LifeBuoy, PenLine, Bell, BellRing, LineChart, ClipboardCheck, Bot, Search, Settings, ShieldCheck,
 } from 'lucide-react'
 
@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
   { to: '/projects', labelKey: 'nav.projects', icon: FolderKanban },
   { to: '/finance', labelKey: 'nav.finance', icon: Wallet },
   { to: '/community', labelKey: 'nav.community', icon: Users },
+  { to: '/marketplace', labelKey: 'nav.marketplace', icon: BriefcaseBusiness },
   { to: '/habits', labelKey: 'nav.habits', icon: Repeat },
   { to: '/motivation', labelKey: 'nav.motivation', icon: Heart },
   { to: '/safe-mode', labelKey: 'nav.safeMode', icon: ShieldCheck },

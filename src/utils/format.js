@@ -3,6 +3,13 @@ import { tr } from '../i18n/index.js'
 /** Default account currency. Every money value is stored as a plain number; only the display adds "TSh". */
 export const DEFAULT_CURRENCY = 'TZS'
 
+export function toDateTimeLocal(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
 const group = (n) => Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 })
 
 /**

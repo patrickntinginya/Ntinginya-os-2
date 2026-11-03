@@ -1,7 +1,7 @@
 # Community live chat (migration 010)
 
-**Status: implemented; NOT verified against a real Supabase project, browser or Android device.** Unit tests cover the client logic with fakes and the SQL is
-reviewed statically; the executable database proof is `supabase/tests/chat_rls.sql` (run `./scripts/verify-db.sh`; not yet run).
+**Status: implemented; NOT verified against a real Supabase project, browser or Android device.** Unit tests cover client logic with fakes. The local
+disposable-database suite, including `supabase/tests/chat_rls.sql`, passed as part of 196 SQL checks; this is not verification against Supabase itself.
 
 ## What it does
 - One-to-one chats and groups (2–50 members), inside **Community → Messages**. Unread badge on the tab; opening a chat from a notification uses `/community?chat=<id>`.

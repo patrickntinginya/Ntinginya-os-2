@@ -1,9 +1,8 @@
--- Slice 1 permission test: Smart Action Center (006, 009) + Community (007, 008, 009).
--- Run in a DISPOSABLE Supabase project or local Postgres (never production) AFTER migrations 001-009. Nothing is kept: the whole script ends with ROLLBACK.
+-- Slice 1 permission test: Smart Action Center (006, 009) + Community (007, 008, 009, 014, 015).
+-- Run in a DISPOSABLE Supabase project or local Postgres (never production) AFTER migrations 001-015. Nothing is kept: the whole script ends with ROLLBACK.
 -- Expected: every notice says PASS and the last notice says "0 failures". Any FAIL (or an error) means do not go live.
 --
--- STATUS: written and statically reviewed, but NOT yet executed (the build environment has no Postgres).
---         Run it once against your Supabase project and record the output in the testing report.
+-- Also run by scripts/verify-db.sh against a fresh disposable local PostgreSQL database.
 begin;
 
 do $$
@@ -13,7 +12,8 @@ declare
   c uuid := '00000000-0000-0000-0000-0000000000c1';  -- administrator (app_metadata.role = admin)
   inst uuid := '00000000-0000-0000-0000-000000000000';
   failures integer := 0;
-  n_b uuid; n_a uuid; n_a2 uuid; post_b uuid; post_a uuid; post_g uuid; post_h uuid; group_b uuid;
+  n_b uuid; n_a uuid; n_a2 uuid; post_b uuid; post_a uuid; post_g uuid; post_h uuid; post_closed uuid; group_b uuid; report_a uuid;
+  comment_a uuid; comment_post uuid; rejected boolean;
   r jsonb; cnt integer; st text; c1 uuid; c2 uuid; ok boolean;
   pub text := b::text || '/pub.jpg'; priv text := b::text || '/priv.jpg'; hid text := b::text || '/hidden.jpg'; av text := b::text || '/avatar.jpg'; mine text := a::text || '/mine.jpg';
 
@@ -39,11 +39,16 @@ begin
   insert into public.community_group_members (group_id, role, status) values (group_b, 'owner', 'active');
   insert into public.community_posts (body, group_id, media_kind, media_path, media_mime) values ('B private-group post', group_b, 'image', priv, 'image/jpeg') returning id into post_g;
   insert into public.community_posts (body, media_kind, media_path, media_mime) values ('B post that will be hidden', 'image', hid, 'image/jpeg') returning id into post_h;
+  insert into public.community_posts (body) values ('B post with comments closed') returning id into post_closed;
+  update public.community_posts set allow_comments = false where id = post_closed;
   update public.community_profiles set avatar_path = av where user_id = b;
   -- Storage objects are created by a privileged role (the bucket and its folders exist after migration 007).
   reset role;
   insert into storage.objects (bucket_id, name, owner) values ('community-media', pub, b), ('community-media', priv, b), ('community-media', hid, b), ('community-media', av, b), ('community-media', mine, a);
+  perform set_config('request.jwt.claims', claims_c, true);
+  set local role authenticated;
   update public.community_posts set status = 'hidden' where id = post_h;
+  reset role;
   perform set_config('request.jwt.claims', claims_b, true);
   set local role authenticated;
 
@@ -144,6 +149,35 @@ begin
 
   -- 7. A can post, and cannot post as B
   insert into public.community_posts (body) values ('A post') returning id into post_a;
+  insert into public.community_comments (post_id, body) values (post_a, 'A comment') returning id into comment_a;
+  rejected := false;
+  begin
+    update public.community_comments set post_id = post_g where id = comment_a;
+  exception when others then rejected := true;
+  end;
+  if rejected then raise notice 'PASS: A cannot move a comment into B''s private group';
+  else failures := failures + 1; raise notice 'FAIL: A moved a comment into B''s private group'; end if;
+  select post_id into comment_post from public.community_comments where id = comment_a;
+  if comment_post = post_a then raise notice 'PASS: rejected comment move leaves its original post unchanged';
+  else failures := failures + 1; raise notice 'FAIL: rejected comment move changed its post'; end if;
+  rejected := false;
+  begin
+    update public.community_comments set post_id = post_h where id = comment_a;
+  exception when others then rejected := true;
+  end;
+  if rejected then raise notice 'PASS: A cannot move a comment to a hidden post';
+  else failures := failures + 1; raise notice 'FAIL: A moved a comment to a hidden post'; end if;
+  rejected := false;
+  begin
+    update public.community_comments set post_id = post_closed where id = comment_a;
+  exception when others then rejected := true;
+  end;
+  if rejected then raise notice 'PASS: A cannot move a comment to a post with comments closed';
+  else failures := failures + 1; raise notice 'FAIL: A moved a comment to a post with comments closed'; end if;
+  update public.community_comments set post_id = post_b where id = comment_a;
+  select post_id into comment_post from public.community_comments where id = comment_a;
+  if comment_post = post_b then raise notice 'PASS: A can move a comment to an eligible public post';
+  else failures := failures + 1; raise notice 'FAIL: A could not move a comment to an eligible public post'; end if;
   begin
     insert into public.community_posts (user_id, body) values (b, 'A pretending to be B');
     failures := failures + 1; raise notice 'FAIL: A posted as B';
@@ -158,6 +192,10 @@ begin
     update public.community_profiles set status = 'suspended' where user_id = a;
     failures := failures + 1; raise notice 'FAIL: member changed own profile status';
   exception when others then raise notice 'PASS: member cannot change own profile status'; end;
+  begin
+    update public.community_profiles set suspended_reason = 'self-supplied' where user_id = a;
+    failures := failures + 1; raise notice 'FAIL: member changed own suspension reason';
+  exception when others then raise notice 'PASS: member cannot change own suspension reason'; end;
   update public.community_posts set status = 'removed' where id = post_b;  -- B's post: RLS hides the row, so 0 rows change
   reset role; select status into st from public.community_posts where id = post_b;
   if st = 'visible' then raise notice 'PASS: A cannot moderate B''s post'; else failures := failures + 1; raise notice 'FAIL: B''s post status is now %', st; end if;
@@ -238,7 +276,7 @@ begin
   set local role authenticated;
   select count(*) into cnt from public.community_blocks;
   if cnt = 0 then raise notice 'PASS: A cannot read B''s block list'; else failures := failures + 1; raise notice 'FAIL: A can read blocks'; end if;
-  insert into public.community_reports (post_id, reason) values (post_b, 'spam');
+  insert into public.community_reports (post_id, reason) values (post_b, 'spam') returning id into report_a;
   begin
     insert into public.community_reports (post_id, reason) values (post_b, 'abuse');
     failures := failures + 1; raise notice 'FAIL: duplicate report accepted';
@@ -257,6 +295,16 @@ begin
   insert into public.community_moderation_log (action, target_type, target_id, reason) values ('hide_post', 'post', post_b, 'slice1 test');
   reset role; select status into st from public.community_posts where id = post_b;
   if st = 'hidden' then raise notice 'PASS: administrator can hide a post'; else failures := failures + 1; raise notice 'FAIL: administrator could not hide a post'; end if;
+  perform set_config('request.jwt.claims', claims_c, true);
+  set local role authenticated;
+  update public.community_profiles set suspended_reason = 'admin test' where user_id = b;
+  update public.community_profiles set status = 'active', suspended_reason = null where user_id = b;
+  update public.community_reports set status = 'resolved', resolved_by = c, resolution_note = 'admin test' where id = report_a;
+  reset role;
+  select status into st from public.community_profiles where user_id = b;
+  if st = 'active' then raise notice 'PASS: administrator can moderate and restore a community profile'; else failures := failures + 1; raise notice 'FAIL: administrator profile moderation failed'; end if;
+  select count(*) into cnt from public.community_reports where id = report_a and status = 'resolved' and resolved_by = c and resolution_note = 'admin test';
+  if cnt = 1 then raise notice 'PASS: administrator can resolve a report and set resolution fields'; else failures := failures + 1; raise notice 'FAIL: administrator report resolution failed'; end if;
   perform set_config('request.jwt.claims', claims_c, true);
   set local role authenticated;
   select count(*) into cnt from public.community_moderation_log;

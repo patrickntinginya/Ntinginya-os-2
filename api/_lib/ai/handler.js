@@ -6,15 +6,15 @@ import { ProviderError, publicStatus, resolveProvider } from './provider.js'
 import { availability, configuredProviders, normalizeSelection, pickCandidates, routeModel, routerLimits } from './router.js'
 import { sharedHealth } from './health.js'
 import { FALLBACK_MESSAGES, providerErrorReply } from './http.js'
-import { dailyLimitReached, makeBurstLimiter } from './limits.js'
+import { consumeAiRequest } from './usage.js'
 import { MODES, MODE_INSTRUCTIONS, systemPrompt } from './prompts.js'
 import { buildContext } from './context.js'
 import { toolDefinitions, validateAction } from '../../../src/lib/ai/actions.js'
+import { normalizeAiContextCategories } from '../../../src/lib/ai/contextCategories.js'
 import { corsDecision, preflight, withCors } from './cors.js'
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 const GENERIC = 'Something went wrong. Please try again.'
-const burst = makeBurstLimiter({ max: 8, windowMs: 60000 })
 const failure = (code, status, requestId) => json(status, { error: code, message: FALLBACK_MESSAGES[code] || GENERIC, ...(requestId ? { request_id: requestId } : {}) })
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -91,8 +91,10 @@ async function handle(request, env, deps) {
   // 2. Is any AI provider configured, and has this user switched AI on? (The app works fully without either.)
   const cfg = resolveProvider(env)
   if (!pickCandidates(env, 'auto').length) return json(503, { error: 'ai_not_configured', message: 'AI Assistant is not configured yet.' })
-  const { data: prof } = await client.from('profiles').select('ai_enabled').eq('user_id', userData.user.id).maybeSingle()
-  if (prof && prof.ai_enabled === false) return json(403, { error: 'ai_disabled', message: 'AI is turned off in your settings.' })
+  const { data: prof, error: profileError } = await client.from('profiles').select('ai_enabled').eq('user_id', userData.user.id).maybeSingle()
+  if (profileError || !prof) return json(503, { error: 'ai_settings_unavailable', message: 'AI settings could not be verified. Please try again later.' })
+  if (typeof prof.ai_enabled !== 'boolean') return json(503, { error: 'ai_settings_unavailable', message: 'AI settings could not be verified. Please try again later.' })
+  if (!prof.ai_enabled) return json(403, { error: 'ai_disabled', message: 'AI is turned off in your settings.' })
 
   // 3. Validate input.
   let body
@@ -110,7 +112,9 @@ async function handle(request, env, deps) {
 
   // Connection test used by Settings -> AI ("Test connection"). Tiny call, no data is read or stored.
   if (body.mode === 'ping') {
-    if (!burst.allow(userData.user.id)) return failure('burst_limit', 429)
+    const usage = await consumeAiRequest(client, { dailyLimit: cfg.dailyLimit, burstLimit: 8, enforceDaily: false })
+    if (!usage.available) return json(503, { error: 'usage_limit_unavailable', message: 'AI usage limits could not be checked. Please try again later.' })
+    if (!usage.allowed) return failure(usage.reason || 'burst_limit', 429)
     try {
       // One quick attempt per provider, no retries: a connection test should report the truth fast.
       await deps.route(env, { system: 'Reply with the single word: ok', messages: [{ role: 'user', content: 'ping' }], maxTokens: 64 }, { selection, signal: request.signal, health: deps.health, limits: { totalMs: 12000, attemptMs: 8000, maxRetries: 0 }, logger: deps.logger })
@@ -131,16 +135,12 @@ async function handle(request, env, deps) {
     return json(400, { error: 'bad_request', message: 'Please check your message and try again.' })
   }
 
-  if (!burst.allow(userData.user.id)) return failure('burst_limit', 429)
+  const usage = await consumeAiRequest(client, { dailyLimit: cfg.dailyLimit, burstLimit: 8 })
+  if (!usage.available) return json(503, { error: 'usage_limit_unavailable', message: 'AI usage limits could not be checked. Please try again later.' })
+  if (!usage.allowed) return failure(usage.reason || 'burst_limit', 429)
 
   try {
-    // 4. Daily cost guard (counts this user's messages in the last 24 hours).
-    const limit = cfg.dailyLimit
-    const since = new Date(Date.now() - 86400000).toISOString()
-    const { count } = await client.from('ai_messages').select('id', { count: 'exact', head: true }).eq('role', 'user').gte('created_at', since)
-    if (dailyLimitReached(count, limit)) return json(429, { error: 'rate_limited', message: FALLBACK_MESSAGES.daily_limit })
-
-    // 5. Conversation (must belong to the caller; RLS enforces this).
+    // 4. Conversation (must belong to the caller; RLS enforces this).
     let convId = conversationId
     let history = []
     if (convId) {
@@ -154,11 +154,12 @@ async function handle(request, env, deps) {
       convId = conv.id
     }
 
-    // 6. Real data + model call.
-    const { block } = await buildContext(client, { today, mode, entityId })
+    // 5. Only explicitly selected categories are queried and sent to the provider.
+    const contextCategories = normalizeAiContextCategories(body.context_categories)
+    const { block } = await buildContext(client, { today, mode, entityId, categories: contextCategories })
     const weekday = WEEKDAYS[new Date(`${today}T00:00:00Z`).getUTCDay()]
     const instruction = MODE_INSTRUCTIONS[mode]
-    const userTurn = `${block}\n\n${instruction ? `Task: ${instruction}\n\n` : ''}User message: ${message}`
+    const userTurn = [block, instruction ? `Task: ${instruction}` : '', `User message: ${message}`].filter(Boolean).join('\n\n')
     // Bounded retry -> automatic failover -> health tracking happen inside routeModel. Nothing is written to the database
     // until it returns ONE complete, validated answer, so a retry or a provider switch can never duplicate a message.
     const routed = await deps.route(env, {

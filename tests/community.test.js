@@ -9,6 +9,7 @@ import {
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const sql = read('supabase/migrations/007_community.sql')
+const commentUpdateSql = read('supabase/migrations/014_community_comment_update_guard.sql')
 const U = '11111111-1111-4111-8111-111111111111'
 
 // ---------- navigation ----------
@@ -138,6 +139,14 @@ test('private groups: content only for active members; join requests need approv
   assert.match(sql, /role = 'member' and status = 'pending' and exists \(select 1 from public\.community_groups g where g\.id = group_id and g\.privacy = 'private'/)
   assert.match(sql, /community_group_members_update[\s\S]*community_is_group_mod\(group_id\)/)
   assert.match(sql, /community_posts_insert[\s\S]*community_is_group_member\(group_id\)/)
+})
+
+test('comment updates cannot move a comment onto a hidden, closed, or unreadable post', () => {
+  assert.match(commentUpdateSql, /community_comments_retarget[\s\S]*before update of post_id on public\.community_comments/)
+  assert.match(commentUpdateSql, /security invoker set search_path = public/)
+  assert.match(commentUpdateSql, /community_can_post\(\)/)
+  assert.match(commentUpdateSql, /p\.allow_comments and p\.status = 'visible'/)
+  assert.match(commentUpdateSql, /if target_accepts_comments is distinct from true then raise exception 'comments_closed'/)
 })
 
 test('SECURITY DEFINER is limited to small yes/no helpers and the notifier, each with a pinned search_path and no anon access', () => {

@@ -8,6 +8,7 @@ import { VOICE } from '../src/lib/voiceFormat.js'
 const read = (f) => fs.readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), 'utf8')
 const strip = (s) => s.replace(/--.*$/gm, '')
 const m011 = strip(read('011_chat_attachment_access.sql')); const m012 = strip(read('012_chat_media_cleanup.sql')); const m013 = strip(read('013_voice.sql'))
+const m015 = strip(read('015_database_trigger_guards.sql'))
 
 test('JavaScript voice limits and database limits are the same numbers (5 minutes, 5 MB, at least 0.5 s)', () => {
   assert.equal(VOICE.maxMs, 300000); assert.equal(VOICE.maxBytes, 5242880); assert.equal(VOICE.minMs, 500)
@@ -58,6 +59,20 @@ test('013: the stored size/type of a voice upload is checked by a trigger on all
   for (const f of ['voice_object_within_limits(text, text)', 'voice_upload_guard()']) assert.match(m013, new RegExp(`revoke all on function public\\.${f.replace(/[()]/g, '\\$&')} from public, anon, authenticated`))
   for (const f of ['voice_object_within_limits', 'voice_upload_guard']) assert.match(m013.slice(m013.indexOf(`function public.${f}`)), /set search_path = public/)
   assert.match(m013, /'audio\/webm','audio\/ogg','audio\/mp4','audio\/aac'/, 'the bucket accepts the containers the recorder produces')
+})
+
+test('015: voice trigger uses table-specific fields and requires owned paths and real stored audio objects within limits', () => {
+  const guard = m015.slice(m015.indexOf('function public.voice_upload_guard'))
+  assert.match(guard, /if tg_table_name = 'chat_messages' then[\s\S]*new\.kind[\s\S]*elsif tg_table_name = 'community_posts' or tg_table_name = 'community_comments' then[\s\S]*new\.media_kind/)
+  assert.match(guard, /new\.sender_id is distinct from auth\.uid\(\)/)
+  assert.match(guard, /new\.user_id is distinct from auth\.uid\(\)/)
+  assert.match(guard, /new\.media_path not like new\.sender_id::text \|\| '\/' \|\| new\.conversation_id::text \|\| '\/%'/)
+  assert.match(guard, /new\.media_path not like new\.user_id::text \|\| '\/%'/)
+  assert.match(guard, /new\.media_mime not like 'audio\/%'/)
+  const helper = m015.slice(m015.indexOf('function public.voice_object_within_limits'), m015.indexOf('revoke all on function public.voice_object_within_limits'))
+  assert.match(helper, /if not found or object_size is null or object_mime is null then return false/)
+  assert.match(helper, /object_mime not like 'audio\/%'/)
+  assert.match(helper, /parsed_size between 1 and 5242880/)
 })
 
 test('the recorder only produces containers the buckets accept', () => {

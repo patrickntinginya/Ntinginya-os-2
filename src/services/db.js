@@ -60,10 +60,29 @@ async function readAll(table) {
   }
 }
 
+async function readMarketplaceAppointments(userId) {
+  let rows = []
+  for (let from = 0; ; from += 1000) {
+    const page = unwrap(await supabase.from('marketplace_appointments')
+      .select('*')
+      .or(`user_id.eq.${userId},professional_id.eq.${userId}`)
+      .range(from, from + 999))
+    rows = rows.concat(page)
+    if (page.length < 1000) return rows
+  }
+}
+
 export async function exportAllData() {
   const result = {}
   for (const table of TABLES) {
     result[table] = await readAll(table)
+  }
+  const { data, error } = await supabase.auth.getUser()
+  if (error) throw error
+  if (data.user) {
+    result.marketplace_professionals = unwrap(await supabase.from('marketplace_professionals').select('*').eq('user_id', data.user.id))
+    result.marketplace_services = unwrap(await supabase.from('marketplace_services').select('*').eq('user_id', data.user.id))
+    result.marketplace_appointments = await readMarketplaceAppointments(data.user.id)
   }
   return { exported_at: new Date().toISOString(), ...result }
 }

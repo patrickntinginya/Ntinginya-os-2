@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog'
 import ErrorState from '../components/ui/ErrorState'
 import Spinner from '../components/ui/Spinner'
 import AiActionCard from '../components/ai/AiActionCard'
+import AiContextSelector from '../components/ai/AiContextSelector'
 import {
   AiError, AiNotConfiguredError, deleteConversation, getAiStatus, listActionRequests,
   listConversations, listMessages, renameConversation, sendToAssistant,
@@ -57,6 +58,7 @@ export default function AiAssistant() {
   const [actions, setActions] = useState([])
   const [loadingConv, setLoadingConv] = useState(false)
   const [input, setInput] = useState('')
+  const [contextCategories, setContextCategories] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [listError, setListError] = useState(null)
@@ -116,7 +118,7 @@ export default function AiAssistant() {
     setBusy(true)
     setMessages((m) => [...m, { id: `tmp-${Date.now()}`, role: 'user', content: message }])
     try {
-      const res = await sendToAssistant({ conversationId: active?.id, message, mode: 'chat' })
+      const res = await sendToAssistant({ conversationId: active?.id, message, mode: 'chat', contextCategories })
       setMessages((m) => [...m, { id: `reply-${Date.now()}`, role: 'assistant', content: res.reply, via: res.fallback_used ? res.provider : null }])
       setActions((a) => [...a, ...(res.actions || [])])
       if (!active) setActive({ id: res.conversation_id, title: message.slice(0, 60) })
@@ -167,7 +169,7 @@ export default function AiAssistant() {
       <div className="flex min-h-[calc(100dvh-11rem)] min-w-0 flex-1 flex-col md:min-h-[calc(100dvh-8rem)]">
         <PageHeader
           title={tr('AI Assistant')}
-          subtitle={active ? active.title : 'Answers come from your own data.'}
+          subtitle={active ? active.title : 'Answers can use personal data you choose to share.'}
           action={
             <div className="flex items-center gap-1 md:hidden">
               <button type="button" className="icon-btn" onClick={() => setHistoryOpen(true)} aria-label={tr('Conversation history')}><History size={20} /></button>
@@ -188,6 +190,8 @@ export default function AiAssistant() {
         )}
         {listError && <div className="mb-4"><ErrorState message={listError} compact /></div>}
 
+        <div className="mb-4"><AiContextSelector categories={contextCategories} onChange={setContextCategories} /></div>
+
         <div className="flex-1 space-y-3" aria-live="polite">
           {loadingConv ? (
             <Spinner />
@@ -198,7 +202,7 @@ export default function AiAssistant() {
               </div>
               <p className="text-xl font-semibold">{tr('How can I help you today?')}</p>
               <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
-                {tr('I can read your tasks, schedule, goals, learning and finances. Changes are only made after you confirm them.')}
+                {tr('Choose which personal data categories to share above. Changes are only made after you confirm them.')}
               </p>
               <div className="mx-auto mt-5 grid max-w-md gap-2">
                 {SUGGESTED.map((p) => (
@@ -269,4 +273,3 @@ export default function AiAssistant() {
     </div>
   )
 }
-

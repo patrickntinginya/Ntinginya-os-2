@@ -57,6 +57,7 @@ export async function sendToAssistant({
   message,
   mode = 'chat',
   entityId,
+  contextCategories = [],
 }) {
   const { url } = endpoint()
   if (!url) throw new AiUnavailableError(notSetUp())
@@ -80,6 +81,7 @@ export async function sendToAssistant({
         message,
         mode,
         entity_id: entityId || null,
+        context_categories: contextCategories,
         today: todayISO(),
         lang: getLang(),
         provider: getAiSelection(),

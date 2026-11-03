@@ -1,6 +1,8 @@
  // Private Safe Mode support endpoint. Uses the signed-in user's RLS-scoped Supabase client.
 // YouTube searches use only a predefined topic + language; private journal text is never sent to YouTube.
 import { resolveProvider, callModel, ProviderError } from './_lib/ai/provider.js'
+import { consumeAiRequest } from './_lib/ai/usage.js'
+import { makeBurstLimiter } from './_lib/ai/limits.js'
 import { corsDecision, preflight, withCors } from './_lib/ai/cors.js'
 import { toWebRequest, sendWebResponse } from './_lib/ai/nodeAdapter.js'
 
@@ -8,7 +10,6 @@ const json = (status, body) => new Response(JSON.stringify(body), {
   status,
   headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
 })
-const burst = new Map()
 const MOODS = {
   stress: { sw: 'kukabiliana na msongo wa mawazo kwa njia salama Kiswahili', en: 'healthy ways to cope with stress and relaxation' },
   discouraged: { sw: 'matumaini na kuanza upya baada ya kukata tamaa Kiswahili', en: 'hope and rebuilding motivation after setbacks' },
@@ -20,17 +21,10 @@ const MOODS = {
   calm: { sw: 'kutulia akili kutafakari na kupumua Kiswahili', en: 'guided relaxation breathing and mindfulness' },
 }
 const CRISIS = /\b(kill myself|suicid(?:e|al)|self[- ]?harm|hurt myself|end my life|want to die|kujidhuru|kujiua|kujiuwa|sitaki kuishi|nataka kufa|kujiumiza)\b/i
-const limiter = (id) => {
-  const now = Date.now()
-  const times = (burst.get(id) || []).filter((t) => now - t < 60000)
-  if (times.length >= 5) return false
-  times.push(now)
-  burst.set(id, times)
-  return true
-}
 const clampText = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : ''
+const crisisBurst = makeBurstLimiter({ max: 5 })
 
-async function core(request, env) {
+async function core(request, env, deps) {
   if (request.method !== 'POST') return json(405, { error: 'method_not_allowed', message: 'Method not allowed.' })
   const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL
   const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY
@@ -53,7 +47,9 @@ async function core(request, env) {
   const details = clampText(body.details, 600)
   const includePersonalContext = body.includePersonalContext === true
 
-  const { createClient } = await import('@supabase/supabase-js')
+  const { createClient } = deps?.createClient
+    ? deps
+    : await import('@supabase/supabase-js')
   const client = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
@@ -68,16 +64,14 @@ async function core(request, env) {
   }
 
   const userId = authData.user.id
-
-  if (!limiter(userId)) {
-    return json(429, {
-      error: 'rate_limited',
-      message: 'Please wait a moment and try again.',
-    })
-  }
+  const crisisRequest = CRISIS.test(details)
 
   // Fixed crisis support does not depend on the AI provider or personal history.
-  if (CRISIS.test(details)) {
+  if (crisisRequest) {
+    if (!crisisBurst.allow(userId)) {
+      return json(429, { error: 'rate_limited', message: 'Please wait a moment and try again.' })
+    }
+
     const reply = lang === 'sw'
       ? 'Pole sana unapopitia hali hii. Usibaki peke yako sasa: tafadhali wasiliana mara moja na mtu unayemwamini, huduma za dharura za eneo lako, au nenda kituo cha afya kilicho karibu. Ikiwezekana, kaa na mtu mwingine na weka mbali vitu unavyoweza kutumia kujiumiza. Una thamani na unastahili msaada wa mtu halisi sasa.'
       : 'I am sorry you are going through this. Please do not stay alone right now: contact someone you trust, local emergency services, or go to a nearby health facility. If possible, stay with another person and move away from anything you could use to hurt yourself. You matter and deserve real human support now.'
@@ -88,6 +82,11 @@ async function core(request, env) {
       searchUrl: null,
     })
   }
+
+  const cfg = resolveProvider(env)
+  const usage = await consumeAiRequest(client, { dailyLimit: cfg.dailyLimit, burstLimit: 5 })
+  if (!usage.available) return json(503, { error: 'usage_limit_unavailable', message: 'AI usage limits could not be checked. Please try again later.' })
+  if (!usage.allowed) return json(429, { error: 'rate_limited', message: 'Please wait a moment and try again.' })
 
   const { data: profile, error: profileError } = await client
     .from('profiles')
@@ -102,14 +101,20 @@ async function core(request, env) {
     })
   }
 
-  if (profile.ai_enabled === false) {
+  if (typeof profile.ai_enabled !== 'boolean') {
+    return json(503, {
+      error: 'profile_unavailable',
+      message: 'Could not verify your AI settings. Please try again later.',
+    })
+  }
+
+  if (!profile.ai_enabled) {
     return json(403, {
       error: 'ai_disabled',
       message: 'AI is turned off in Settings.',
     })
   }
 
-  const cfg = resolveProvider(env)
   if (!cfg.configured) {
     return json(503, {
       error: 'ai_not_configured',
@@ -208,14 +213,14 @@ async function core(request, env) {
   return json(200, { reply, videos, searchUrl: CRISIS.test(details) ? null : searchUrl })
 }
 
-export async function handleSafeModeSupport(request, env = process.env) {
+export async function handleSafeModeSupport(request, env = process.env, deps) {
   const decision = corsDecision(request, env)
   const early = preflight(request, decision)
   if (early) return early
   if (decision.blocked) return json(403, { error: 'origin_not_allowed', message: 'Request not allowed.' })
   let response
   try {
-    response = await core(request, env)
+    response = await core(request, env, deps)
   } catch (e) {
     console.error('safe-mode-support failed:', e?.code || e?.name || 'unknown')
     response = json(500, { error: 'server_error', message: 'Could not prepare support right now. Please try again.' })
