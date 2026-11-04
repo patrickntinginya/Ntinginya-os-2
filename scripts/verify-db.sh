@@ -24,7 +24,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-CONTAINER_ID=$(docker run -d -e POSTGRES_PASSWORD=verify postgres:16)
+CONTAINER_ID=$(docker run -d -e POSTGRES_PASSWORD=verify postgres:17)
 ready=0
 for i in $(seq 1 40); do
   if docker exec "$CONTAINER_ID" pg_isready -U postgres >/dev/null 2>&1; then ready=1; break; fi
