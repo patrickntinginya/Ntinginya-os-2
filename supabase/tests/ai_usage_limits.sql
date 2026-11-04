@@ -33,9 +33,10 @@ begin
      or has_function_privilege('authenticated', 'private.consume_ai_request()', 'EXECUTE') then
     raise exception 'authenticated role can access the private implementation';
   end if;
-  if has_function_privilege('anon', 'public.consume_ai_request()', 'EXECUTE')
-     or has_function_privilege('public', 'public.consume_ai_request()', 'EXECUTE') then
-    raise exception 'anonymous or PUBLIC role can execute the public RPC';
+  -- PUBLIC is a pseudo-role, not a valid role argument to has_function_privilege.
+  -- Checking anon is sufficient: it inherits any EXECUTE grant made to PUBLIC.
+  if has_function_privilege('anon', 'public.consume_ai_request()', 'EXECUTE') then
+    raise exception 'anonymous role can execute the public RPC (directly or via PUBLIC)';
   end if;
 
   -- Chat and ping use the same zero-argument quota RPC. These first two calls
