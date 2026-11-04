@@ -70,13 +70,30 @@ export const gemini = {
       try { status = (await res.json())?.error?.status || '' } catch { /* not JSON */ }
       throw new ProviderError(`provider_status_${res.status}`, status === 'RESOURCE_EXHAUSTED' ? 'rate_limit' : kindFromStatus(res.status))
     }
-    const body = await res.json()
+    let body
+    try { body = await res.json() } catch {
+      const error = new ProviderError('malformed_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      const error = new ProviderError('malformed_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
+    }
     const cand = body.candidates?.[0]
     const parts = Array.isArray(cand?.content?.parts) ? cand.content.parts : []
-    return {
-      text: parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join('').trim(),
-      toolCalls: parts.filter((p) => p.functionCall?.name).map((p) => ({ name: p.functionCall.name, input: p.functionCall.args || {} })),
-      stopReason: cand?.finishReason || body.promptFeedback?.blockReason || null,
+    const text = parts.filter((p) => typeof p.text === 'string' && !p.thought).map((p) => p.text).join('').trim()
+    const toolCalls = parts.filter((p) => p.functionCall?.name).map((p) => ({ name: p.functionCall.name, input: p.functionCall.args || {} }))
+    const stopReason = cand?.finishReason || body.promptFeedback?.blockReason || null
+    if (!text && !toolCalls.length) {
+      if (['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII'].includes(stopReason)) {
+        return { text, toolCalls, stopReason }
+      }
+      const error = new ProviderError('malformed_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
     }
+    return { text, toolCalls, stopReason }
   },
 }

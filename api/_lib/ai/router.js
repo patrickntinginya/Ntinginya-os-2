@@ -57,8 +57,10 @@ export function pickCandidates(env, selection) {
   const { primary, list } = configuredProviders(env)
   const sel = normalizeSelection(selection)
   if (sel === 'auto') {
-    const first = primary.configured ? primary : list[0]
-    return first ? [first, ...list.filter((c) => c.name !== first.name)] : []
+    if (primary.name === 'none') return []
+    return ['gemini', 'openrouter']
+      .map((name) => list.find((cfg) => cfg.name === name))
+      .filter(Boolean)
   }
   return list.filter((c) => c.name === sel)
 }
@@ -83,6 +85,7 @@ export async function routeModel(env, request, opts = {}) {
     signal, partialSent = () => false, correlationId = newCorrelationId(), logger = (e) => console.log(JSON.stringify(e)), random = Math.random,
   } = opts
   const limits = { ...routerLimits(env), ...(opts.limits || {}) }
+  if (opts.noRetries) limits.maxRetries = 0
   const startedAt = now()
   const deadline = startedAt + limits.totalMs
   const remaining = () => deadline - now()
@@ -93,7 +96,7 @@ export async function routeModel(env, request, opts = {}) {
   if (!candidates.length) {
     const err = new ProviderError('not_ready', 'not_ready')
     err.attempts = 0; err.tried = []; err.correlationId = correlationId
-    log({ provider: explicit ? selection : 'none', outcome: 'error', failureKind: 'not_ready', fallback: false, durationMs: 0 })
+    log({ provider: explicit ? selection : 'none', selectedProvider: null, outcome: 'error', failureKind: 'not_ready', fallbackAttempted: false, fallbackSucceeded: false, durationMs: 0, requestDurationMs: now() - startedAt })
     throw err
   }
 
@@ -124,7 +127,8 @@ export async function routeModel(env, request, opts = {}) {
         const d = now() - t0
         health.recordSuccess(cfg.name, d)
         if (!tried.includes(cfg.name)) tried.push(cfg.name) // a retry on the same provider is not a provider switch
-        log({ provider: cfg.name, model: cfg.model, outcome: 'success', fallback: i > 0 || sawSkipped, attempt: attempts, durationMs: d })
+        const fallbackSucceeded = i > 0 || sawSkipped
+        log({ provider: cfg.name, selectedProvider: candidates[0].name, model: cfg.model, outcome: 'success', fallbackAttempted: fallbackSucceeded, fallbackSucceeded, attempt: attempts, durationMs: d, requestDurationMs: now() - startedAt })
         return { result, provider: cfg.name, model: cfg.model, fallbackUsed: tried.length > 1 || i > 0, attempts, correlationId }
       } catch (e) {
         const err = e instanceof ProviderError ? e : new ProviderError('server', 'server')
@@ -132,7 +136,7 @@ export async function routeModel(env, request, opts = {}) {
         lastErr = err
         if (!tried.includes(cfg.name)) tried.push(cfg.name)
         health.recordFailure(cfg.name, err.kind, { retryAfterMs: err.retryAfterMs })
-        log({ provider: cfg.name, model: cfg.model, outcome: 'failure', failureKind: err.kind, fallback: i > 0, attempt: attempts, durationMs: d })
+        log({ provider: cfg.name, failedProvider: cfg.name, selectedProvider: candidates[0].name, model: cfg.model, outcome: 'failure', failureKind: err.kind, httpStatus: err.httpStatus, fallbackAttempted: i > 0, fallbackSucceeded: false, attempt: attempts, durationMs: d, requestDurationMs: now() - startedAt })
         if (err.kind === 'cancelled') { err.attempts = attempts; err.tried = tried; err.correlationId = correlationId; throw err }
         // Streaming guard: once any text has reached the user, a retry or a switch would restart (duplicate) or splice
         // (mix providers) the answer. The error is surfaced instead and the client keeps the question for a manual retry.
@@ -162,8 +166,10 @@ export async function routeModel(env, request, opts = {}) {
 
   const err = lastErr || new ProviderError('server', 'server')
   const final = new ProviderError(err.message, sawSkipped && attempts === 0 ? 'server' : err.kind)
+  final.httpStatus = err.httpStatus
+  final.retryAfterMs = err.retryAfterMs
   final.attempts = attempts; final.tried = tried; final.correlationId = correlationId
   final.bothFailed = !explicit && candidates.length > 1
-  log({ provider: tried.join('>') || 'none', outcome: 'error', failureKind: final.kind, fallback: tried.length > 1, attempts, durationMs: now() - startedAt })
+  log({ provider: tried.join('>') || 'none', failedProvider: tried.at(-1) || null, selectedProvider: candidates[0].name, outcome: 'error', failureKind: final.kind, httpStatus: final.httpStatus, fallbackAttempted: tried.length > 1, fallbackSucceeded: false, attempts, durationMs: now() - startedAt, requestDurationMs: now() - startedAt })
   throw final
 }

@@ -84,7 +84,7 @@ async function core(request, env, deps) {
   }
 
   const cfg = resolveProvider(env)
-  const usage = await consumeAiRequest(client, { dailyLimit: cfg.dailyLimit, burstLimit: 5 })
+  const usage = await consumeAiRequest(client, { purpose: 'safe_mode_support' })
   if (!usage.available) return json(503, { error: 'usage_limit_unavailable', message: 'AI usage limits could not be checked. Please try again later.' })
   if (!usage.allowed) return json(429, { error: 'rate_limited', message: 'Please wait a moment and try again.' })
 

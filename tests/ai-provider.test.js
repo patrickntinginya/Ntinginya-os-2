@@ -12,8 +12,13 @@ test('no provider and no key: gemini is the default but reported as not configur
   assert.equal(c.configured, false)
 })
 test('AI_PROVIDER=none disables AI even when a key exists', () => assert.equal(resolveProvider({ AI_PROVIDER: 'none', AI_API_KEY: 'k' }).status, 'disabled'))
-test('V2 compatibility: a key without AI_PROVIDER means anthropic', () => {
+test('a legacy key without AI_PROVIDER does not implicitly enable Anthropic', () => {
   const c = resolveProvider({ AI_API_KEY: 'k' })
+  assert.equal(c.name, 'gemini')
+  assert.equal(c.status, 'not_configured')
+})
+test('explicit Anthropic configuration remains supported', () => {
+  const c = resolveProvider({ AI_PROVIDER: 'anthropic', AI_API_KEY: 'k' })
   assert.equal(c.name, 'anthropic')
   assert.equal(c.status, 'ready')
 })
@@ -72,7 +77,7 @@ test('openai adapter: parses text and tool calls, drops malformed tool calls', a
 test('anthropic adapter: parses text and tool_use blocks', async () => {
   const body = { stop_reason: 'tool_use', content: [{ type: 'text', text: 'Ok' }, { type: 'tool_use', name: 'create_task', input: { title: 'X' } }] }
   await withFetch(body, async (seen) => {
-    const r = await callModel(resolveProvider({ AI_API_KEY: 'k' }), { system: 's', messages: [], tools: [] })
+    const r = await callModel(resolveProvider({ AI_PROVIDER: 'anthropic', AI_API_KEY: 'k' }), { system: 's', messages: [], tools: [] })
     assert.equal(r.text, 'Ok')
     assert.deepEqual(r.toolCalls, [{ name: 'create_task', input: { title: 'X' } }])
     assert.equal(seen().init.headers['x-api-key'], 'k')
@@ -81,5 +86,5 @@ test('anthropic adapter: parses text and tool_use blocks', async () => {
 test('a failing provider surfaces as ProviderError (the function turns it into a friendly message)', async () => {
   const real = globalThis.fetch
   globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => ({}) })
-  try { await assert.rejects(() => callModel(resolveProvider({ AI_API_KEY: 'k' }), { system: 's', messages: [] }), /provider_status_500/) } finally { globalThis.fetch = real }
+  try { await assert.rejects(() => callModel(resolveProvider({ AI_PROVIDER: 'anthropic', AI_API_KEY: 'k' }), { system: 's', messages: [] }), /provider_status_500/) } finally { globalThis.fetch = real }
 })

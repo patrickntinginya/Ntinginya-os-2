@@ -14,8 +14,10 @@ test('Gemini is the default provider', () => {
   assert.equal(resolveProvider({ AI_PROVIDER: 'gemini', GEMINI_API_KEY: KEY }).status, 'ready')
   assert.equal(resolveProvider({}).name, 'gemini')
 })
-test('legacy V3 setups keep working: AI_API_KEY alone still means anthropic', () => {
-  assert.equal(resolveProvider({ AI_API_KEY: 'k' }).name, 'anthropic')
+test('legacy AI_API_KEY alone does not bypass the Gemini/OpenRouter setup', () => {
+  assert.equal(resolveProvider({ AI_API_KEY: 'k' }).name, 'gemini')
+  assert.equal(resolveProvider({ AI_API_KEY: 'k' }).configured, false)
+  assert.equal(resolveProvider({ AI_PROVIDER: 'anthropic', AI_API_KEY: 'k' }).name, 'anthropic')
   assert.equal(resolveProvider({ AI_PROVIDER: 'gemini', AI_API_KEY: 'k' }).status, 'not_configured') // gemini does not use AI_API_KEY
 })
 test('model comes from GEMINI_MODEL, otherwise the documented stable default', () => {

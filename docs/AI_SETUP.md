@@ -16,6 +16,8 @@ Never add a `VITE_` prefix to them: `VITE_` values are copied into the public we
 5. Free models can be removed or rate limited at any time. If the model disappears, requests to OpenRouter fail with a configuration error, the provider enters a cool-down, and automatic mode keeps using Gemini.
 
 The OpenRouter address is fixed in code; no request field, browser value or environment variable can redirect it.
+Automatic routing considers only Gemini and OpenRouter. A legacy `AI_API_KEY` does not implicitly configure Anthropic
+or another provider; configure `GEMINI_API_KEY` and/or the OpenRouter variables above.
 
 ## 3. Choosing a provider (users)
 Settings -> AI settings -> **AI service**. The list appears only when the server reports more than one configured provider, and only configured providers are listed.
@@ -37,6 +39,8 @@ Streaming: the current transport is **not** streaming, so no partial text can re
 
 Cancellation: the router stops and does not try the other provider if the request signal aborts. On Vercel's Node adapter a client disconnect does not abort the request signal, so cancellation is best-effort there.
 
+The browser does not automatically retry failed chat requests; it restores the message to the input for a user-initiated retry. If the server successfully saves an answer but its response is lost, manually retrying may create a duplicate exchange and consume quota again. Durable idempotency is not implemented; safely preventing that case requires persistent request identifiers and database uniqueness/transaction handling.
+
 ## 5. Health monitor and cool-down
 Per provider: status, consecutive failures, last success, recent latency, rate-limit state, cool-down. After 3 consecutive transient failures a provider is skipped for 30 s, doubling to a 5 minute ceiling. Auth/model/config errors cool down for 5 minutes. When a cool-down ends, **one** probe request is allowed through; success restores the provider, failure starts the next bounded cool-down. Nothing is disabled permanently.
 **Limitation:** this state lives in the memory of one serverless instance. Instances do not share it, and a cold instance starts "healthy". It is an optimisation, not a source of truth.
@@ -44,8 +48,11 @@ Per provider: status, consecutive failures, last success, recent latency, rate-l
 ## 6. Diagnostics (administrators)
 `GET /api/ai-chat?diagnostics=1` with the user's bearer token. The server verifies the token with Supabase and requires `app_metadata.role` of `admin` or `owner` (the same rule as `safe_mode_is_admin()` in the database). `user_metadata` is user-editable and is **not** trusted. Others get 401/403.
 To make an administrator, set `app_metadata` `{"role":"admin"}` from the Supabase dashboard or with the service role on your own machine; the app has no screen or API that can do this.
-It returns counters, timings, status and the last 50 routing events (provider, model, outcome, failure category, fallback flag, duration, correlation id). No keys, prompts or answers. Administrators see it in Settings -> AI settings.
+It returns counters, timings, status and the last 50 routing events (selected/failed provider, model, outcome, failure category, HTTP status, fallback attempted/succeeded, duration, correlation id). No keys, prompts or answers. Administrators see it in Settings -> AI settings.
 Server logs carry the same fields as one JSON line per attempt (`evt: "ai_route"`), plus the correlation id that the user sees in `request_id`.
+
+The Settings **Test connection** action is protected by the per-minute burst limit but does not count against the daily AI request quota.
+Apply `supabase/migrations/021_ai_usage_ping_daily_quota.sql` to databases that already have migration `016_ai_usage_limits.sql`; it adds an independent burst-window column and updates the existing quota RPC without resetting AI usage data.
 
 ## 7. Testing missing or invalid keys
 - Unset `OPENROUTER_API_KEY`: the provider is not listed, the picker disappears, Gemini serves alone.

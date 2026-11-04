@@ -65,11 +65,28 @@ const migrationNames = (list) => {
   const originals = ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql', '005_safe_mode_media.sql']
   const sorted = [...list].sort()
   const later = sorted.slice(originals.length)
-  return { originals: sorted.slice(0, originals.length), expected: originals, later, numbered: later.every((f, i) => f.startsWith(String(originals.length + 1 + i).padStart(3, '0') + '_') && /^\d{3}_[a-z0-9_]+\.sql$/.test(f)) }
+  const versions = later.map((f) => /^\d{3}_[a-z0-9_]+\.sql$/.test(f) ? Number(f.slice(0, 3)) : NaN).sort((a, b) => a - b)
+  const versionSet = new Set(versions)
+  const externalVersions = new Set([19, 20])
+  const maxVersion = Math.max(5, ...versions.filter(Number.isFinite))
+  const sequenceValid = versions.every(Number.isFinite) &&
+    Array.from({ length: maxVersion - 5 }, (_, i) => i + 6).every((version) => versionSet.has(version) || externalVersions.has(version))
+  return {
+    originals: sorted.slice(0, originals.length),
+    expected: originals,
+    later,
+    validNames: versions.every(Number.isFinite),
+    uniqueVersions: versionSet.size === versions.length,
+    sequenceValid,
+    versions,
+  }
 }
-test('the original migrations keep their names; every later file is numbered consecutively (006, 007, ...) with no gaps or duplicates', () => {
+test('migration files preserve originals, have unique numeric versions, and allow only externally managed 019/020 gaps', () => {
   const r = migrationNames(fs.readdirSync(path.join(root, 'supabase/migrations')))
   assert.deepEqual(r.originals, r.expected)
   assert.ok(r.later.length >= 6, 'the V6 migrations are present')
-  assert.ok(r.numbered, `later migrations must be 006_*, 007_*, ... in order: ${r.later.join(', ')}`)
+  assert.ok(r.validNames, 'later migrations must use the NNN_lowercase_name.sql format')
+  assert.ok(r.uniqueVersions, 'migration version prefixes must be unique')
+  assert.ok(r.sequenceValid, `migration versions must be consecutive except for externally managed 019/020: ${r.versions.join(', ')}`)
+  assert.ok(r.versions.includes(21), 'AI quota migration 021 must follow the externally reported 019/020 versions')
 })

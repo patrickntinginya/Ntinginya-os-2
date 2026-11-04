@@ -46,7 +46,7 @@ function fakeClient(rec, options = {}) {
     from: make,
     async rpc(name) {
       rec.rpcs.push(name)
-      if (name === 'consume_ai_request') {
+      if (name === 'consume_ai_request' || name === 'consume_ai_ping') {
         if (options.usageThrows) throw options.usageThrows
         if (options.usageError) return { data: null, error: options.usageError }
         return { data: options.usageData || [{ allowed: true, reason: null }], error: null }
@@ -162,11 +162,23 @@ test('primary success: Gemini answers, OpenRouter is never contacted, one exchan
   assertSafe(r.text)
 })
 
+test('a new conversation is created only after a provider returns a complete answer', async () => {
+  const failed = await ask({ body: { conversation_id: null }, script: { gemini: [status(500), status(500)], openrouter: [status(500), status(500)] } })
+  assert.notEqual(failed.res.status, 200)
+  assert.equal(failed.rec.inserts.some((i) => i.table === 'ai_conversations'), false)
+
+  const succeeded = await ask({ body: { conversation_id: null } })
+  assert.equal(succeeded.res.status, 200)
+  assert.equal(succeeded.rec.inserts.filter((i) => i.table === 'ai_conversations').length, 1)
+  assert.equal(messageInserts(succeeded.rec).length, 1)
+})
+
 test('timeout: falls back to OpenRouter once; the answer is OpenRouter\'s alone and is stored exactly once', async () => {
   const r = await ask({ script: { gemini: [abort()] } })
   assert.equal(r.res.status, 200); assert.equal(r.json.reply, 'openrouter answer'); assert.equal(r.json.provider, 'openrouter'); assert.equal(r.json.fallback_used, true)
   assert.equal(r.count('gemini'), 1); assert.equal(r.count('openrouter'), 1)
   assert.equal(messageInserts(r.rec).length, 1)
+  assert.equal(r.rec.rpcs.filter((name) => name === 'consume_ai_request').length, 1)
   assert.equal(messageInserts(r.rec)[0].rows.find((m) => m.role === 'assistant').content, 'openrouter answer')
 })
 
@@ -178,11 +190,26 @@ test('HTTP 429 without Retry-After: immediate fallback, no hammering of Gemini',
 test('HTTP 503: one bounded retry on Gemini, then OpenRouter (never a third Gemini call)', async () => {
   const r = await ask({ script: { gemini: [status(503), status(503), status(503)] } })
   assert.equal(r.count('gemini'), 2); assert.equal(r.count('openrouter'), 1); assert.equal(r.json.provider, 'openrouter')
+  assert.equal(r.rec.rpcs.filter((name) => name === 'consume_ai_request').length, 1)
+  assert.equal(messageInserts(r.rec).length, 1)
 })
 
 test('HTTP 503 once: the retry succeeds and OpenRouter is not used', async () => {
   const r = await ask({ script: { gemini: [status(503), geminiOk('recovered')] } })
   assert.equal(r.json.reply, 'recovered'); assert.equal(r.count('gemini'), 2); assert.equal(r.count('openrouter'), 0); assert.equal(r.json.fallback_used, false)
+  assert.equal(r.rec.rpcs.filter((name) => name === 'consume_ai_request').length, 1)
+  assert.equal(messageInserts(r.rec).length, 1)
+})
+
+test('a malformed Gemini 200 response is treated as failure and automatically falls back', async () => {
+  const malformed = { status: 200, body: { candidates: [] } }
+  const r = await ask({ script: { gemini: [malformed, malformed] } })
+  assert.equal(r.res.status, 200)
+  assert.equal(r.json.provider, 'openrouter')
+  assert.equal(r.json.reply, 'openrouter answer')
+  assert.equal(r.count('gemini'), 2)
+  assert.equal(r.count('openrouter'), 1)
+  assert.equal(messageInserts(r.rec).length, 1)
 })
 
 test('invalid Gemini key: not retried, OpenRouter answers, and the next request skips Gemini during cooldown', async () => {
@@ -209,10 +236,12 @@ test('missing secondary credentials: Gemini failure is reported safely and OpenR
 })
 
 test('both providers failing: friendly code, bounded attempts, correlation id, nothing stored, nothing leaked', async () => {
-  const r = await ask({ script: { gemini: [status(500), status(500)], openrouter: [status(500), status(500)] } })
+  const r = await ask({ body: { conversation_id: null }, script: { gemini: [status(500), status(500)], openrouter: [status(500), status(500)] } })
   assert.equal(r.res.status, 502); assert.equal(r.json.error, 'ai_provider_error'); assert.match(r.json.request_id, /^ai_/)
   assert.equal(r.count('gemini') + r.count('openrouter'), 4)
   assert.equal(messageInserts(r.rec).length, 0) // the question is not saved as an exchange; the browser keeps it for a retry
+  assert.equal(r.rec.inserts.some((i) => i.table === 'ai_conversations'), false)
+  assert.equal(r.rec.rpcs.filter((name) => name === 'consume_ai_request').length, 1)
   assert.equal(r.json.reply, undefined); assertSafe(r.text)
 })
 
@@ -270,6 +299,8 @@ test('long answers pass through whole from either provider', async () => {
 test('connection test uses the router with no retries and reports honestly', async () => {
   const ok = await ask({ body: { mode: 'ping' } })
   assert.equal(ok.res.status, 200); assert.equal(ok.json.ok, true)
+  assert.equal(ok.rec.rpcs.filter((name) => name === 'consume_ai_ping').length, 1)
+  assert.equal(ok.rec.rpcs.filter((name) => name === 'consume_ai_request').length, 0)
   const bad = await ask({ body: { mode: 'ping', provider: 'gemini' }, script: { gemini: [status(500), status(500)] } })
   assert.equal(bad.res.status, 502); assert.equal(bad.count('gemini'), 1); assert.equal(bad.rec.inserts.length, 0)
 })

@@ -18,5 +18,6 @@ export class ProviderError extends Error {
     this.name = 'ProviderError'
     const m = /^provider_status_(\d+)$/.exec(message)
     this.kind = kind || (m ? kindFromStatus(Number(m[1])) : ['timeout', 'network', 'not_ready'].includes(message) ? message : 'server')
+    this.httpStatus = m ? Number(m[1]) : null
   }
 }

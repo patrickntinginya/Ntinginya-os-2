@@ -41,18 +41,34 @@ export const openrouter = {
       throw err
     }
     let body
-    try { body = await res.json() } catch { throw new ProviderError('malformed_response', 'malformed') }
+    try { body = await res.json() } catch {
+      const error = new ProviderError('malformed_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
+    }
     // OpenRouter can answer 200 with an error object in the body.
-    if (body?.error) throw new ProviderError('provider_body_error', body.error.code === 429 ? 'rate_limit' : 'server')
+    if (body?.error) {
+      const error = new ProviderError('provider_body_error', body.error.code === 429 ? 'rate_limit' : 'server')
+      error.httpStatus = res.status
+      throw error
+    }
     const choice = body?.choices?.[0]
-    if (!choice || typeof choice.message !== 'object') throw new ProviderError('malformed_response', 'malformed')
+    if (!choice || !choice.message || typeof choice.message !== 'object') {
+      const error = new ProviderError('malformed_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
+    }
     const msg = choice.message
     const toolCalls = []
     for (const c of msg.tool_calls || []) {
       try { toolCalls.push({ name: c.function.name, input: JSON.parse(c.function.arguments || '{}') }) } catch { /* malformed tool call dropped */ }
     }
     const text = (typeof msg.content === 'string' ? msg.content : '').trim()
-    if (!text && !toolCalls.length) throw new ProviderError('empty_response', 'malformed')
+    if (!text && !toolCalls.length) {
+      const error = new ProviderError('empty_response', 'malformed')
+      error.httpStatus = res.status
+      throw error
+    }
     return { text, toolCalls, stopReason: choice.finish_reason || null }
   },
 }

@@ -436,7 +436,8 @@ test('the AI endpoint is native Vercel: no Netlify imports; bearer-token check, 
   assert.match(fn, /const early = preflight\(request, decision\)/)
   assert.match(fn, /authorization/i)
   assert.match(fn, /getUser\(/)
-  assert.match(fn, /dailyLimit/)
+  assert.match(fn, /consumeAiRequest\(client, \{ purpose: body\.mode === 'ping' \? 'ping' : 'chat' \}\)/)
+  assert.match(fn, /usage_limit_unavailable/)
   assert.doesNotMatch(fn, /SERVICE_ROLE|service_role/)
   assert.doesNotMatch(read('api/_lib/ai/cors.js').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n'), /['"]\*['"]/, 'no wildcard origin in code (comments excluded)')
 })
@@ -510,10 +511,22 @@ test('Swahili has a translation for every new Android user-facing string', () =>
   }
 })
 
-test('migrations: the originals keep their names, later files are consecutive, and no SQL file mentions the Android code', () => {
+test('migrations: original names stay fixed, versions are unique, 019/020 may be externally managed, and no SQL file mentions Android code', () => {
   const sorted = readdirSync(new URL('../supabase/migrations', import.meta.url)).sort()
   assert.deepEqual(sorted.slice(0, 5), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql', '004_v5.sql', '005_safe_mode_media.sql'])
-  sorted.slice(5).forEach((f, i) => assert.ok(f.startsWith(String(6 + i).padStart(3, '0') + '_'), `${f} should be number ${6 + i}`))
+  const numbered = sorted.slice(5).map((f) => {
+    const match = /^(\d{3})_[a-z0-9_]+\.sql$/.exec(f)
+    assert.ok(match, `${f} must use the NNN_lowercase_name.sql format`)
+    return Number(match[1])
+  })
+  assert.equal(new Set(numbered).size, numbered.length, 'migration version prefixes must be unique')
+  const versions = new Set(numbered)
+  const externalVersions = new Set([19, 20])
+  const maxVersion = Math.max(...numbered)
+  for (let version = 6; version <= maxVersion; version++) {
+    assert.ok(versions.has(version) || externalVersions.has(version), `version ${version} is missing and is not externally managed`)
+  }
+  assert.ok(versions.has(21), 'AI quota migration 021 must follow the externally reported 019/020 versions')
   for (const directory of ['migrations', 'tests']) {
     assert.ok(statSync(new URL(`../supabase/${directory}`, import.meta.url)).isDirectory(), `supabase/${directory} should exist`)
   }

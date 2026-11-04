@@ -32,10 +32,19 @@ test('Gemini success does not touch OpenRouter', async () => {
   const r = await routeModel(BOTH, REQ, { ...quiet, call: f.call, health: createHealthMonitor() })
   assert.equal(r.provider, 'gemini'); assert.equal(r.fallbackUsed, false); assert.deepEqual(names(f), ['gemini'])
 })
+test('automatic mode orders the configured pair as Gemini then OpenRouter', () => {
+  assert.deepEqual(pickCandidates(BOTH, 'auto').map((cfg) => cfg.name), ['gemini', 'openrouter'])
+})
 test('transient 5xx: one bounded retry on the same provider, then success without fallback', async () => {
   const f = fake({ gemini: [new ProviderError('provider_status_503')] })
   const r = await routeModel(BOTH, REQ, { ...quiet, call: f.call, health: createHealthMonitor() })
   assert.deepEqual(names(f), ['gemini', 'gemini']); assert.equal(r.provider, 'gemini'); assert.equal(r.attempts, 2)
+})
+test('connection-check noRetries option prevents retry but still permits fallback', async () => {
+  const f = fake({ gemini: [new ProviderError('provider_status_503')] })
+  const r = await routeModel(BOTH, REQ, { ...quiet, noRetries: true, call: f.call, health: createHealthMonitor() })
+  assert.equal(r.provider, 'openrouter')
+  assert.deepEqual(names(f), ['gemini', 'openrouter'])
 })
 test('persistent 5xx: retry budget is exhausted, then OpenRouter answers', async () => {
   const f = fake({ gemini: [new ProviderError('provider_status_500'), new ProviderError('provider_status_500'), new ProviderError('provider_status_500')] })
@@ -81,9 +90,32 @@ test('invalid key with no secondary: one attempt, a config error, never a loop',
   assert.equal(f.calls.length, 1)
 })
 test('Gemini not configured but OpenRouter is: OpenRouter answers (config error allows fallback)', async () => {
+  const env = { OPENROUTER_API_KEY: O, OPENROUTER_MODEL: 'a/b:free' }
   const f = fake({})
-  const r = await routeModel({ OPENROUTER_API_KEY: O, OPENROUTER_MODEL: 'a/b:free' }, REQ, { ...quiet, call: f.call, health: createHealthMonitor() })
+  const r = await routeModel(env, REQ, { ...quiet, call: f.call, health: createHealthMonitor() })
+  assert.deepEqual(pickCandidates(env, 'auto').map((cfg) => cfg.name), ['openrouter'])
   assert.equal(r.provider, 'openrouter')
+})
+test('legacy AI_API_KEY alone never selects Anthropic in automatic mode', async () => {
+  const env = { AI_API_KEY: 'legacy-key' }
+  const f = fake({})
+  assert.deepEqual(pickCandidates(env, 'auto'), [])
+  await assert.rejects(() => routeModel(env, REQ, { ...quiet, call: f.call, health: createHealthMonitor() }), (e) => e.kind === 'not_ready' && e.attempts === 0)
+  assert.deepEqual(names(f), [])
+})
+test('no valid Gemini or OpenRouter provider makes zero bounded attempts', async () => {
+  const env = { AI_PROVIDER: 'anthropic', AI_API_KEY: 'legacy-key' }
+  const f = fake({})
+  assert.deepEqual(pickCandidates(env, 'auto'), [])
+  await assert.rejects(() => routeModel(env, REQ, { ...quiet, call: f.call, health: createHealthMonitor() }), (e) => e.kind === 'not_ready' && e.attempts === 0)
+  assert.deepEqual(names(f), [])
+})
+test('automatic selection keeps Gemini primary even when AI_PROVIDER names OpenRouter', () => {
+  assert.deepEqual(pickCandidates({ ...BOTH, AI_PROVIDER: 'openrouter' }, 'auto').map((cfg) => cfg.name), ['gemini', 'openrouter'])
+})
+test('automatic selection uses only Gemini and OpenRouter when either is configured', () => {
+  const env = { ...BOTH, AI_PROVIDER: 'anthropic', AI_API_KEY: 'legacy-key' }
+  assert.deepEqual(pickCandidates(env, 'auto').map((cfg) => cfg.name), ['gemini', 'openrouter'])
 })
 test('missing OpenRouter credentials: reported safely, Gemini still serves', async () => {
   assert.equal(resolveNamed('openrouter', { GEMINI_API_KEY: G }).status, 'not_configured')
@@ -189,9 +221,11 @@ test('health snapshot exposes counters and timings only, never keys', async () =
 })
 test('logs carry provider/duration/outcome/failure/fallback/correlation id but no key and no message text', async () => {
   const lines = []
-  await routeModel(BOTH, { ...REQ, messages: [{ role: 'user', content: 'MY-PRIVATE-QUESTION' }] }, { ...quiet, logger: (e) => lines.push(JSON.stringify(e)), call: fake({ gemini: [new ProviderError('timeout')] }).call, health: createHealthMonitor() })
+  await routeModel(BOTH, { ...REQ, messages: [{ role: 'user', content: 'MY-PRIVATE-QUESTION' }] }, { ...quiet, logger: (e) => lines.push(JSON.stringify(e)), call: fake({ gemini: [new ProviderError('provider_status_503'), new ProviderError('provider_status_503')] }).call, health: createHealthMonitor() })
   const all = lines.join('\n')
-  assert.match(all, /"provider":"gemini"/); assert.match(all, /"failureKind":"timeout"/); assert.match(all, /"fallback":true/); assert.match(all, /"cid":"ai_/); assert.match(all, /"durationMs"/)
+  assert.match(all, /"provider":"gemini"/); assert.match(all, /"failureKind":"server"/); assert.match(all, /"httpStatus":503/)
+  assert.match(all, /"fallbackAttempted":true/); assert.match(all, /"fallbackSucceeded":true/)
+  assert.match(all, /"cid":"ai_/); assert.match(all, /"durationMs"/); assert.match(all, /"requestDurationMs"/)
   assert.ok(!all.includes('MY-PRIVATE-QUESTION') && !all.includes(G) && !all.includes(O))
 })
 test('OpenRouter adapter: fixed upstream URL, bearer key, parses text and drops malformed tool calls', async () => {
@@ -221,6 +255,10 @@ test('status endpoint lists only configured providers and never leaks keys', asy
   assert.deepEqual(only.providers.map((p) => p.name), ['gemini'])
   const orOnly = await (await handleAiRequest(new Request('https://app.example/api/ai-chat?status=1'), { OPENROUTER_API_KEY: O, OPENROUTER_MODEL: 'a/b' })).json()
   assert.equal(orOnly.configured, true)
+  const legacyOnly = await (await handleAiRequest(new Request('https://app.example/api/ai-chat?status=1'), { AI_API_KEY: 'legacy-key' })).json()
+  assert.equal(legacyOnly.configured, false)
+  assert.equal(legacyOnly.provider, 'gemini')
+  assert.deepEqual(legacyOnly.providers, [])
 })
 test('diagnostics: no token = 401, and the endpoint is not open to the public', async () => {
   const env = { ...BOTH, VITE_SUPABASE_URL: 'https://x.supabase.co', VITE_SUPABASE_ANON_KEY: 'anon' }

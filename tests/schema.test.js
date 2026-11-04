@@ -14,6 +14,8 @@ const rlsTables = new Set(rlsLists.flat())
 
 test('migrations are numbered and additive', () => {
   assert.deepEqual(files.slice(0, 3), ['001_v1_foundation.sql', '002_v2.sql', '003_v3.sql'])
+  const versions = files.map((name) => name.match(/^(\d+)_/)?.[1])
+  assert.equal(new Set(versions).size, versions.length, 'migration version prefixes must be unique')
   assert.ok(!/drop table/i.test(sql), 'no migration may drop a table')
   assert.ok(!/truncate /i.test(sql), 'no migration may truncate data')
 })
@@ -50,11 +52,18 @@ test('Marketplace appointment references prevent professional deletion from casc
 })
 test('AI usage limiter storage is private and its RPC is caller-scoped', () => {
   assert.match(sql, /alter table public\.ai_usage_limits enable row level security/)
+  assert.match(sql, /add column if not exists burst_request_times timestamptz\[\]/)
   assert.match(sql, /revoke all on public\.ai_usage_limits from public, anon, authenticated/)
+  assert.match(sql, /create schema if not exists private/)
   assert.match(sql, /caller uuid := auth\.uid\(\)/)
   assert.match(sql, /if caller is null then raise exception/)
-  assert.match(sql, /revoke all on function public\.consume_ai_request\(integer, integer, boolean\) from public, anon/)
-  assert.match(sql, /grant execute on function public\.consume_ai_request\(integer, integer, boolean\) to authenticated/)
+  assert.match(sql, /set request_times = case when p_enforce_daily then recent_daily \|\| now\(\) else recent_daily end/)
+  assert.match(sql, /revoke all on function private\.consume_ai_request\(boolean, integer\) from public, anon, authenticated/)
+  assert.match(sql, /grant execute on function public\.consume_ai_request\(\) to authenticated/)
+  assert.match(sql, /grant execute on function public\.consume_ai_ping\(\) to authenticated/)
+  assert.match(sql, /revoke all on function public\.consume_ai_ping\(\) from public, anon, authenticated/)
+  assert.match(sql, /grant execute on function public\.consume_ai_safe_mode_support\(\) to authenticated/)
+  assert.match(sql, /revoke all on function public\.consume_ai_safe_mode_support\(\) from public, anon, authenticated/)
 })
 test('every user-owned table has an owner column that defaults to the signed-in user (chat_* tables are membership-based and are guarded by tests/chat-db.test.js instead)', () => {
   for (const t of created.filter((c) => !c.name.startsWith('chat_'))) {
@@ -88,7 +97,7 @@ test('security-definer functions are limited to the caller and not callable by a
     const name = chunk.match(/^(\w+)/)[1]
     const header = chunk.slice(0, chunk.indexOf('$$'))
     if (/security definer/.test(header) && (name.startsWith('chat_') || name.startsWith('voice_'))) assert.match(header, /set search_path = public/, `${name} must pin its search_path (its grants are checked in tests/chat-db.test.js and tests/voice-db.test.js)`)
-    else if (/security definer/.test(header)) assert.ok(['handle_new_user', 'delete_my_account', 'community_blocked', 'community_is_group_member', 'community_is_group_mod', 'community_can_post', 'community_notify', 'community_is_group_owner', 'community_can_read_media', 'notification_begin_action', 'notification_finish_action', 'notification_snooze', 'notification_wake_due', 'consume_ai_request', 'marketplace_notify_appointment'].includes(name), `unexpected security definer function ${name}`)
+    else if (/security definer/.test(header)) assert.ok(['handle_new_user', 'delete_my_account', 'community_blocked', 'community_is_group_member', 'community_is_group_mod', 'community_can_post', 'community_notify', 'community_is_group_owner', 'community_can_read_media', 'notification_begin_action', 'notification_finish_action', 'notification_snooze', 'notification_wake_due', 'consume_ai_request', 'consume_ai_ping', 'consume_ai_safe_mode_support', 'marketplace_notify_appointment'].includes(name), `unexpected security definer function ${name}`)
   }
 })
 test('habits: one entry per habit per day, and frequent queries are indexed', () => {

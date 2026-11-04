@@ -7,8 +7,7 @@
 //   anthropic  needs AI_API_KEY       (model: AI_MODEL)
 //   openai     needs AI_API_KEY       (model: AI_MODEL, optional AI_BASE_URL for compatible servers)
 //   ollama     needs AI_BASE_URL      (model: AI_MODEL)
-// If AI_PROVIDER is empty: GEMINI_API_KEY set -> gemini; else legacy AI_API_KEY set -> anthropic (V2/V3 compatible);
-// else gemini (reported as "not configured").
+// Automatic app routing uses only Gemini and OpenRouter. A legacy AI_API_KEY does not enable Anthropic implicitly.
 import { anthropic } from './providers/anthropic.js'
 import { openai } from './providers/openai.js'
 import { ollama } from './providers/ollama.js'
@@ -58,7 +57,7 @@ export function resolveNamed(name, env = process.env) {
  */
 export function resolveProvider(env = process.env) {
   const requested = String(env.AI_PROVIDER || '').trim().toLowerCase()
-  const name = requested || (env.GEMINI_API_KEY ? 'gemini' : env.AI_API_KEY ? 'anthropic' : DEFAULT_PROVIDER)
+  const name = requested || DEFAULT_PROVIDER
   return resolveNamed(name, env)
 }
 

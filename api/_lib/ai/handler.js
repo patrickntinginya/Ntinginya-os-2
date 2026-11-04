@@ -2,7 +2,7 @@
 // so it runs on Vercel (see ../../ai-chat.js) and can be unit-tested without a server.
 // The AI key lives only in the server environment. Every database read/write below uses a client that carries
 // the caller's own access token, so Row Level Security keeps each user inside their own data.
-import { ProviderError, publicStatus, resolveProvider } from './provider.js'
+import { ProviderError, publicStatus, resolveNamed, resolveProvider } from './provider.js'
 import { availability, configuredProviders, normalizeSelection, pickCandidates, routeModel, routerLimits } from './router.js'
 import { sharedHealth } from './health.js'
 import { FALLBACK_MESSAGES, providerErrorReply } from './http.js'
@@ -24,7 +24,7 @@ function statusBody(env) {
   const primary = resolveProvider(env)
   const providers = availability(env)
   const first = pickCandidates(env, 'auto')[0]
-  const base = publicStatus(first || primary)
+  const base = publicStatus(first || (primary.name === 'none' ? primary : resolveNamed('gemini', env)))
   return { ...base, configured: Boolean(first), providers }
 }
 
@@ -109,13 +109,12 @@ async function handle(request, env, deps) {
   // The user's provider choice. Anything unknown means automatic; it can never name an upstream address or a model.
   const selection = normalizeSelection(body.provider)
 
-  // Both connection pings and chat requests consume the same fixed database quota. The RPC owns
-  // the 100-per-rolling-day and 8-per-minute limits; request mode cannot weaken either limit.
-  const usage = await consumeAiRequest(client)
+  // The database selects fixed quotas based on this server-side operation; callers cannot supply limit values.
+  const usage = await consumeAiRequest(client, { purpose: body.mode === 'ping' ? 'ping' : 'chat' })
   if (!usage.available) return json(503, { error: 'usage_limit_unavailable', message: 'AI usage limits could not be checked. Please try again later.' })
   if (!usage.allowed) return failure(usage.reason || 'burst_limit', 429)
 
-  // Connection test used by Settings -> AI. It consumes quota just like a chat request.
+  // Connection test used by Settings -> AI. It shares the burst quota but not the daily chat quota.
   if (body.mode === 'ping') {
     try {
       // One quick attempt per provider, no retries: a connection test should report the truth fast.
@@ -146,10 +145,6 @@ async function handle(request, env, deps) {
       if (!conv) return json(404, { error: 'not_found', message: 'That conversation was not found.' })
       const { data: msgs } = await client.from('ai_messages').select('role,content').eq('conversation_id', convId).order('created_at', { ascending: false }).limit(10)
       history = (msgs || []).reverse()
-    } else {
-      const { data: conv, error } = await client.from('ai_conversations').insert({ title: message.slice(0, 60) }).select('id').single()
-      if (error) throw error
-      convId = conv.id
     }
 
     // 5. Only explicitly selected categories are queried and sent to the provider.
@@ -174,6 +169,12 @@ async function handle(request, env, deps) {
       if (checked.ok) proposals.push({ action_type: call.name, payload: checked.values, summary: checked.summary })
     }
     const reply = result.text || (proposals.length ? `I prepared ${proposals.length} action${proposals.length === 1 ? '' : 's'} for you to review below.` : 'I could not produce an answer. Please try again.')
+
+    if (!convId) {
+      const { data: conv, error } = await client.from('ai_conversations').insert({ title: message.slice(0, 60) }).select('id').single()
+      if (error) throw error
+      convId = conv.id
+    }
 
     const { error: msgError } = await client.from('ai_messages').insert([
       { conversation_id: convId, role: 'user', content: message },
