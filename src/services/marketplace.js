@@ -173,10 +173,10 @@ export async function fetchAppointments(userId, { admin = false } = {}) {
   const serviceById = new Map((services || []).map((service) => [service.id, service]))
   const professionalById = new Map((professionals || []).map((professional) => [professional.user_id, professional]))
   return appointments.map((appointment) => ({
-    ...appointment,
-    service: serviceById.get(appointment.service_id) || (appointment.service_title_snapshot ? { title: appointment.service_title_snapshot } : null),
-    professional: professionalById.get(appointment.professional_id) || (appointment.professional_name_snapshot ? { display_name: appointment.professional_name_snapshot } : null),
-  }))
+  ...appointment,
+  service: serviceById.get(appointment.service_id) || null,
+  professional: professionalById.get(appointment.professional_id) || null,
+}))
 }
 
 export async function requestAppointment(userId, service, startsAt, message) {
