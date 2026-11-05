@@ -28,7 +28,11 @@ export async function buildContext(client, { today, mode, entityId, categories }
   const keys = [...new Set([...selected].flatMap((category) => CATEGORY_KEYS[category]))]
   if (!keys.length) return { block: '', failed: [] }
 
-  const { data: d, errors } = await loadSnapshot(client, keys, today)
+  // AI has a separate bounded history limit; dashboard snapshot defaults remain unchanged.
+  const AI_HABIT_ENTRY_LIMIT = 3000
+  const { data: d, errors } = await loadSnapshot(client, keys, today, {
+    habitEntriesMaxRows: AI_HABIT_ENTRY_LIMIT,
+  })
   const tasks = d.tasks || []
   const goals = d.goals || []
   const milestones = d.milestones || []
@@ -103,12 +107,21 @@ export async function buildContext(client, { today, mode, entityId, categories }
   }
 
   const failed = Object.keys(errors)
+  if (
+    selected.has('habits') &&
+    Array.isArray(d.habitEntries) &&
+    d.habitEntries.length >= AI_HABIT_ENTRY_LIMIT
+  ) {
+    failed.push('habit_entries_history_may_be_limited')
+  }
+
   let focus = ''
   if (selected.has('ideas') || selected.has('goals')) {
     try {
       if (selected.has('ideas') && mode === 'idea_validation' && entityId) {
-        const { data } = await client.from('ideas').select('title,description,category,problem,proposed_solution,target_users,business_opportunity,notes,next_action,status').eq('id', entityId).maybeSingle()
-        if (data) focus = `<focus_idea>${JSON.stringify(data)}</focus_idea>`
+        const result = await client.from('ideas').select('title,description,category,problem,proposed_solution,target_users,business_opportunity,notes,next_action,status').eq('id', entityId).maybeSingle()
+        if (result.error) throw result.error
+        if (result.data) focus = `<focus_idea>${JSON.stringify(result.data)}</focus_idea>`
       }
       if (selected.has('goals') && mode === 'goal_coach' && entityId) {
         const goal = goals.find((g) => g.id === entityId)
@@ -119,11 +132,78 @@ export async function buildContext(client, { today, mode, entityId, categories }
     }
   }
 
+  const MAX_CONTEXT_CHARS = 30000
   let json = JSON.stringify({ today, ...ctx })
-  if (json.length > 30000) {
-    if (ctx.tasks) ctx.tasks.open = ctx.tasks.open.slice(0, 15)
-    if (ctx.schedule_next_7_days) ctx.schedule_next_7_days = ctx.schedule_next_7_days.slice(0, 15)
+
+  // Keep summary metrics, progressively shorten detail lists across all categories.
+  // This avoids sending an oversized context when several categories are selected.
+  if (json.length > MAX_CONTEXT_CHARS) {
+    const listPaths = [
+      ['tasks', 'open'],
+      ['reminders_next_14_days'],
+      ['schedule_next_7_days'],
+      ['schedule_conflicts'],
+      ['goals_active'],
+      ['goals_needing_attention'],
+      ['projects'],
+      ['ideas_recent'],
+      ['learning', 'items'],
+      ['finance', 'expenses_by_category_this_month'],
+      ['finance', 'expenses_by_category_last_month'],
+      ['finance', 'budgets_this_month'],
+      ['finance', 'savings_goals'],
+      ['finance', 'last_6_months'],
+    ]
+
+    for (const path of listPaths) {
+      let target = ctx
+      for (const key of path.slice(0, -1)) target = target?.[key]
+      const key = path[path.length - 1]
+      if (Array.isArray(target?.[key]) && target[key].length > 5) {
+        target[key] = target[key].slice(0, 5)
+        json = JSON.stringify({ today, ...ctx })
+        if (json.length <= MAX_CONTEXT_CHARS) break
+      }
+    }
+  }
+
+  if (json.length > MAX_CONTEXT_CHARS) {
+    // Last-resort bound: remove detail arrays, never the numeric summary fields.
+    for (const path of [
+      ['tasks', 'open'], ['reminders_next_14_days'],
+      ['schedule_next_7_days'], ['schedule_conflicts'],
+      ['goals_active'], ['goals_needing_attention'], ['projects'],
+      ['ideas_recent'], ['learning', 'items'],
+      ['finance', 'expenses_by_category_this_month'],
+      ['finance', 'expenses_by_category_last_month'],
+      ['finance', 'budgets_this_month'], ['finance', 'savings_goals'],
+      ['finance', 'last_6_months'],
+    ]) {
+      let target = ctx
+      for (const key of path.slice(0, -1)) target = target?.[key]
+      if (target && Array.isArray(target[path[path.length - 1]])) {
+        target[path[path.length - 1]] = []
+      }
+    }
+    failed.push('context_details_trimmed_to_fit')
     json = JSON.stringify({ today, ...ctx })
   }
-  return { block: `<user_data>${json}</user_data>\n<data_gaps>${failed.join(', ') || 'none'}</data_gaps>\n${focus}`, failed }
+  // Enforce the limit on the complete payload, including XML-like tags and focus details.
+  let finalFocus = focus
+  let block = `<user_data>${json}</user_data>\n<data_gaps>${failed.join(', ') || 'none'}</data_gaps>\n${finalFocus}`
+
+  if (block.length > MAX_CONTEXT_CHARS) {
+    finalFocus = ''
+    failed.push('focus_details_omitted')
+    block = `<user_data>${json}</user_data>\n<data_gaps>${failed.join(', ')}</data_gaps>`
+  }
+
+  // Absolute fallback: preserve a valid, compact JSON payload rather than sending oversized context.
+  if (block.length > MAX_CONTEXT_CHARS) {
+    failed.push('context_reduced_to_minimal_summary')
+    const minimalJson = JSON.stringify({ today, context_details_omitted: true })
+    block = `<user_data>${minimalJson}</user_data>\n<data_gaps>${failed.join(', ')}</data_gaps>`
+  }
+
+  return { block, failed }
 }

@@ -13,7 +13,7 @@ const q = async (promise) => {
 async function qAll(make, maxRows = 10000) {
   let rows = []
   for (let from = 0; rows.length < maxRows; from += 1000) {
-    const page = await q(make().range(from, from + 999))
+    const page = await q(make().range(from, from + Math.min(999, maxRows - rows.length - 1)))
     rows = rows.concat(page)
     if (page.length < 1000) break
   }
@@ -22,7 +22,12 @@ async function qAll(make, maxRows = 10000) {
 
 export const LOADERS = {
   habits: (c) => q(c.from('habits').select('*').order('created_at').limit(200)),
-  habitEntries: (c, today) => qAll(() => c.from('habit_entries').select('habit_id,entry_date').gte('entry_date', addDays(today, -400)).order('entry_date', { ascending: false })),
+  habitEntries: (c, today, options = {}) => qAll(
+    () => c.from('habit_entries').select('habit_id,entry_date')
+      .gte('entry_date', addDays(today, -400))
+      .order('entry_date', { ascending: false }),
+    options.habitEntriesMaxRows ?? 10000,
+  ),
   recurring: (c) => q(c.from('recurring_transactions').select('*').eq('is_active', true).limit(200)),
   tasks: (c) => q(c.from('tasks').select('*').order('created_at', { ascending: false }).limit(1000)),
   goals: (c) => q(c.from('goals').select('*').order('created_at', { ascending: false }).limit(500)),
@@ -55,8 +60,8 @@ export const LOADERS = {
 export const FINANCE_KEYS = ['totals', 'monthly', 'catThis', 'catPrev', 'weekIncome', 'weekExpenses', 'budgets']
 
 /** Each key loads independently: one failing table never blanks a whole page. */
-export async function loadSnapshot(client, keys, today) {
-  const results = await Promise.allSettled(keys.map((k) => LOADERS[k](client, today)))
+export async function loadSnapshot(client, keys, today, options = {}) {
+  const results = await Promise.allSettled(keys.map((k) => LOADERS[k](client, today, options)))
   const data = {}
   const errors = {}
   results.forEach((r, i) => {
