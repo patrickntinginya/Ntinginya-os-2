@@ -155,7 +155,7 @@ export async function saveService(userId, service) {
 
 export async function fetchAppointments(userId, { admin = false } = {}) {
   let query = supabase.from('marketplace_appointments')
-    .select('id,user_id,professional_id,service_id,professional_name_snapshot,service_title_snapshot,starts_at,ends_at,message,status,created_at,updated_at')
+    .select('id,user_id,professional_id,service_id,starts_at,ends_at,message,status,created_at,updated_at')
     .order('starts_at', { ascending: true })
     .limit(500)
   if (!admin) query = query.or(`user_id.eq.${userId},professional_id.eq.${userId}`)
