@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import test from 'node:test'
 
 const path = new URL(
-  '../supabase/migrations/023_safe_mode_media_update_guard.sql',
+  '../../supabase/migrations/023_safe_mode_media_update_guard.sql',
   import.meta.url
 )
 
