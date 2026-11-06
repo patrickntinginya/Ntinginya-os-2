@@ -51,3 +51,82 @@ test('shared media requires matching owner folder', () => {
     /storage\.foldername\(name\)\)\[2\] = media\.user_id::text/i
   )
 })
+function canReadMedia(authUid, bucketId, objectName, records) {
+  if (bucketId !== 'safe-mode-media') return false
+
+  const folders = objectName.split('/')
+  const media = records.find(
+    record => record.storage_path === objectName
+  )
+
+  if (!media) return false
+
+  const personal =
+    folders[0] === authUid &&
+    media.user_id === authUid
+
+  const shared =
+    folders[0] === 'shared' &&
+    folders[1] === media.user_id &&
+    media.visibility === 'shared'
+
+  return personal || shared
+}
+
+const userA = 'user-a'
+const userB = 'user-b'
+
+const records = [
+  {
+    user_id: userA,
+    visibility: 'personal',
+    storage_path: 'user-a/video.mp4'
+  },
+  {
+    user_id: userA,
+    visibility: 'shared',
+    storage_path: 'shared/user-a/shared.mp4'
+  }
+]
+
+test('owner can read personal media', () => {
+  assert.equal(
+    canReadMedia(userA, 'safe-mode-media', 'user-a/video.mp4', records),
+    true
+  )
+})
+
+test('another user cannot read personal media', () => {
+  assert.equal(
+    canReadMedia(userB, 'safe-mode-media', 'user-a/video.mp4', records),
+    false
+  )
+})
+
+test('authenticated user can read approved shared media', () => {
+  assert.equal(
+    canReadMedia(userB, 'safe-mode-media', 'shared/user-a/shared.mp4', records),
+    true
+  )
+})
+
+test('shared media requires matching owner folder', () => {
+  assert.equal(
+    canReadMedia(userB, 'safe-mode-media', 'shared/user-b/shared.mp4', records),
+    false
+  )
+})
+
+test('object without database record cannot be read', () => {
+  assert.equal(
+    canReadMedia(userA, 'safe-mode-media', 'user-a/orphan.mp4', records),
+    false
+  )
+})
+
+test('media from another bucket cannot be read', () => {
+  assert.equal(
+    canReadMedia(userA, 'chat-media', 'user-a/video.mp4', records),
+    false
+  )
+})
