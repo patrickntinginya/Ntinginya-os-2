@@ -21,6 +21,7 @@ USING (
               OR
               (
                   (storage.foldername(name))[1] = 'shared'
+                  AND (storage.foldername(name))[2] = media.user_id::text
                   AND media.visibility = 'shared'
               )
           )
