@@ -45,3 +45,9 @@ test('shared media requires shared visibility', () => {
   assert.match(sql, /storage\.foldername\(name\)\)\[1\] = 'shared'/i)
   assert.match(sql, /media\.visibility = 'shared'/i)
 })
+test('shared media requires matching owner folder', () => {
+  assert.match(
+    sql,
+    /storage\.foldername\(name\)\)\[2\] = media\.user_id::text/i
+  )
+})
