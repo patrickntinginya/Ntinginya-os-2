@@ -133,6 +133,14 @@ test('the language is passed to the prompt: Kiswahili and English', () => {
   assert.match(systemPrompt('2026-10-07', 'Wednesday', 'sw'), /Hakuna data za kutosha bado/)
   assert.match(systemPrompt('2026-10-07', 'Wednesday', 'en'), /English/)
 })
+test('Ntinginya AI supports general knowledge and content creation without inventing personal data', () => {
+  const prompt = systemPrompt('2026-11-09', 'Monday', 'en')
+  assert.match(prompt, /General knowledge/)
+  assert.match(prompt, /CVs, cover letters, job applications, business plans/)
+  assert.match(prompt, /only source for claims about the user's personal/)
+  assert.match(prompt, /must press Confirm/)
+  assert.match(prompt, /Never invent buttons, pages, settings or capabilities/)
+})
 test('AI action safety: only create-style actions exist, none delete, and bad payloads are rejected', () => {
   const names = toolDefinitions().map((t) => t.name)
   assert.ok(names.length > 0)

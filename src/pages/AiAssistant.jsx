@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { History, MessageSquarePlus, Pencil, Send, Sparkles, Trash2 } from 'lucide-react'
+import { History, MessageSquarePlus, Pencil, Send, Sparkles, Trash2, Mic, Volume2, VolumeX } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Button from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
@@ -13,7 +13,7 @@ import {
   listConversations, listMessages, renameConversation, sendToAssistant,
 } from '../services/aiClient'
 import { friendlyError } from '../utils/format'
-import { tr } from '../i18n'
+import { getLang, localeOf, tr } from '../i18n'
 
 // Questions that the assistant answers from the user's own data (it never sees anything else).
 const SUGGESTED = [
@@ -59,6 +59,10 @@ export default function AiAssistant() {
   const [loadingConv, setLoadingConv] = useState(false)
   const [input, setInput] = useState('')
   const [contextCategories, setContextCategories] = useState([])
+  const [listening, setListening] = useState(false)
+  const [speechError, setSpeechError] = useState(null)
+  const [voiceOutput, setVoiceOutput] = useState(false)
+  const recognitionRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [listError, setListError] = useState(null)
@@ -67,6 +71,87 @@ export default function AiAssistant() {
   const [renameValue, setRenameValue] = useState('')
   const [toDelete, setToDelete] = useState(null)
   const endRef = useRef(null)
+
+  const startVoiceInput = () => {
+    setSpeechError(null)
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition
+
+    if (!SpeechRecognition) {
+      setSpeechError(tr('Voice input is not supported on this browser.'))
+      return
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.lang = localeOf(getLang())
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+
+      recognition.onstart = () => setListening(true)
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map((result) => result[0]?.transcript || '')
+          .join(' ')
+          .trim()
+
+        if (transcript) {
+          setInput((current) => current ? `${current} ${transcript}` : transcript)
+        }
+      }
+
+      recognition.onerror = (event) => {
+        setSpeechError(
+          event.error === 'not-allowed'
+            ? tr('Microphone permission was denied.')
+            : tr('Voice input could not be completed. Please try again.')
+        )
+      }
+
+      recognition.onend = () => {
+        setListening(false)
+        recognitionRef.current = null
+      }
+
+      recognitionRef.current = recognition
+      recognition.start()
+    } catch {
+      recognitionRef.current = null
+      setListening(false)
+      setSpeechError(tr('Could not start the microphone. Please try again.'))
+    }
+  }
+
+  const speakReply = (text) => {
+    if (!voiceOutput || !('speechSynthesis' in window)) return
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = localeOf(getLang())
+    window.speechSynthesis.speak(utterance)
+  }
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop()
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!voiceOutput && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }, [voiceOutput])
 
   const loadConversations = useCallback(async () => {
     try {
@@ -120,6 +205,7 @@ export default function AiAssistant() {
     try {
       const res = await sendToAssistant({ conversationId: active?.id, message, mode: 'chat', contextCategories })
       setMessages((m) => [...m, { id: `reply-${Date.now()}`, role: 'assistant', content: res.reply, via: res.fallback_used ? res.provider : null }])
+      speakReply(res.reply)
       setActions((a) => [...a, ...(res.actions || [])])
       if (!active) setActive({ id: res.conversation_id, title: message.slice(0, 60) })
       loadConversations()
@@ -240,11 +326,45 @@ export default function AiAssistant() {
           <div ref={endRef} />
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="sticky bottom-20 mt-4 flex gap-2 bg-canvas pt-2 md:bottom-4 dark:bg-canvas-dark">
-          <label htmlFor="ai-input" className="sr-only">{tr('Message')}</label>
-          <input id="ai-input" className="input" placeholder={tr('Ask about your day, money or goals')} maxLength={4000} value={input} onChange={(e) => setInput(e.target.value)} />
-          <Button type="submit" disabled={!input.trim() || busy || notConfigured} aria-label={tr('Send')} className="!px-4"><Send size={20} aria-hidden="true" /></Button>
-        </form>
+        <div className="sticky bottom-20 mt-4 space-y-2 bg-canvas pt-2 md:bottom-4 dark:bg-canvas-dark">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={startVoiceInput}
+              disabled={busy}
+              aria-label={listening ? tr('Stop voice input') : tr('Start voice input')}
+              className="!px-3"
+            >
+              <Mic size={18} aria-hidden="true" />
+              {listening ? tr('Listening...') : tr('Speak')}
+            </Button>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setVoiceOutput((enabled) => !enabled)}
+              aria-pressed={voiceOutput}
+            >
+              {voiceOutput
+                ? <Volume2 size={18} aria-hidden="true" />
+                : <VolumeX size={18} aria-hidden="true" />}
+              {voiceOutput ? tr('Voice output on') : tr('Voice output off')}
+            </button>
+          </div>
+
+          {speechError && (
+            <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
+              {speechError}
+            </p>
+          )}
+
+          <form onSubmit={(e) => { e.preventDefault(); send(input) }} className="flex gap-2">
+            <label htmlFor="ai-input" className="sr-only">{tr('Message')}</label>
+            <input id="ai-input" className="input" placeholder={tr('Ask about your day, money or goals')} maxLength={4000} value={input} onChange={(e) => setInput(e.target.value)} />
+            <Button type="submit" disabled={!input.trim() || busy || notConfigured} aria-label={tr('Send')} className="!px-4"><Send size={20} aria-hidden="true" /></Button>
+          </form>
+        </div>
       </div>
 
       {historyOpen && <Modal title={tr('Conversations')} onClose={() => setHistoryOpen(false)}>{list}</Modal>}
