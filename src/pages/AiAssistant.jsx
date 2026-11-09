@@ -61,7 +61,7 @@ export default function AiAssistant() {
   const [contextCategories, setContextCategories] = useState([])
   const [listening, setListening] = useState(false)
   const [speechError, setSpeechError] = useState(null)
-  const [voiceOutput, setVoiceOutput] = useState(false)
+  const [voiceOutput, setVoiceOutput] = useState(true)
   const recognitionRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -72,25 +72,80 @@ export default function AiAssistant() {
   const [toDelete, setToDelete] = useState(null)
   const endRef = useRef(null)
 
-  const startVoiceInput = () => {
+  const isNativePlatform = () => window.Capacitor?.isNativePlatform?.() === true
+
+  const startVoiceInput = async () => {
     setSpeechError(null)
 
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition
-
-    if (!SpeechRecognition) {
-      setSpeechError(tr('Voice input is not supported on this browser.'))
-      return
-    }
-
     if (listening) {
-      recognitionRef.current?.stop()
+      try {
+        if (isNativePlatform()) {
+          const { SpeechRecognition } = await import('@capacitor-community/speech-recognition')
+          await SpeechRecognition.stop()
+        } else {
+          recognitionRef.current?.stop()
+        }
+      } catch {}
       setListening(false)
       return
     }
 
+    if (isNativePlatform()) {
+      try {
+        const { SpeechRecognition } = await import('@capacitor-community/speech-recognition')
+        const { available } = await SpeechRecognition.available()
+
+        if (!available) {
+          setSpeechError(tr('Voice input is not supported on this browser.'))
+          return
+        }
+
+        let permission = await SpeechRecognition.checkPermissions()
+
+        if (permission.speechRecognition !== 'granted') {
+          permission = await SpeechRecognition.requestPermissions()
+        }
+
+        if (permission.speechRecognition !== 'granted') {
+          setSpeechError(tr('Microphone permission was denied.'))
+          return
+        }
+
+        setListening(true)
+
+        const result = await SpeechRecognition.start({
+          language: localeOf(getLang()),
+          maxResults: 1,
+          prompt: tr('Speak'),
+          popup: true,
+          partialResults: false,
+        })
+
+        const transcript = result.matches?.[0]?.trim()
+
+        if (transcript) {
+          setInput((current) => current ? `${current} ${transcript}` : transcript)
+        } else {
+          setSpeechError(tr('Voice input could not be completed. Please try again.'))
+        }
+      } catch {
+        setSpeechError(tr('Voice input could not be completed. Please try again.'))
+      } finally {
+        setListening(false)
+      }
+      return
+    }
+
+    const WebSpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition
+
+    if (!WebSpeechRecognition) {
+      setSpeechError(tr('Voice input is not supported on this browser.'))
+      return
+    }
+
     try {
-      const recognition = new SpeechRecognition()
+      const recognition = new WebSpeechRecognition()
       recognition.lang = localeOf(getLang())
       recognition.continuous = false
       recognition.interimResults = false
@@ -131,8 +186,27 @@ export default function AiAssistant() {
     }
   }
 
-  const speakReply = (text) => {
-    if (!voiceOutput || !('speechSynthesis' in window)) return
+  const speakReply = async (text) => {
+    if (!voiceOutput || !text?.trim()) return
+
+    if (isNativePlatform()) {
+      try {
+        const { TextToSpeech } = await import('@capacitor-community/text-to-speech')
+        await TextToSpeech.stop()
+        await TextToSpeech.speak({
+          text,
+          lang: localeOf(getLang()),
+          rate: 1,
+          pitch: 1,
+          volume: 1,
+        })
+      } catch {
+        setSpeechError(tr('Voice output could not be completed. Please try again.'))
+      }
+      return
+    }
+
+    if (!('speechSynthesis' in window)) return
 
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
@@ -143,13 +217,34 @@ export default function AiAssistant() {
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop()
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+
+      if (isNativePlatform()) {
+        Promise.all([
+          import('@capacitor-community/speech-recognition'),
+          import('@capacitor-community/text-to-speech'),
+        ]).then(([speech, tts]) => {
+          speech.SpeechRecognition.stop().catch(() => {})
+          tts.TextToSpeech.stop().catch(() => {})
+        }).catch(() => {})
+      }
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
     }
   }, [])
 
   useEffect(() => {
-    if (!voiceOutput && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
+    if (!voiceOutput) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+
+      if (isNativePlatform()) {
+        import('@capacitor-community/text-to-speech')
+          .then(({ TextToSpeech }) => TextToSpeech.stop())
+          .catch(() => {})
+      }
     }
   }, [voiceOutput])
 

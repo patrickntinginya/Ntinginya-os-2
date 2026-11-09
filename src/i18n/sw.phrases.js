@@ -1304,6 +1304,7 @@ export default {
   "Voice post": "Chapisho la sauti",
   "Voice input is not supported on this browser.": "Kuingiza sauti hakutumiki kwenye kivinjari hiki.",
   "Microphone permission was denied.": "Ruhusa ya kutumia kipaza sauti imekataliwa.",
+  "Voice output could not be completed. Please try again.": "Kusoma majibu kwa sauti hakukukamilika. Tafadhali jaribu tena.",
   "Voice input could not be completed. Please try again.": "Kuingiza sauti hakukukamilika. Tafadhali jaribu tena.",
   "Could not start the microphone. Please try again.": "Imeshindwa kuwasha kipaza sauti. Tafadhali jaribu tena.",
   "Stop voice input": "Simamisha kuingiza sauti",
