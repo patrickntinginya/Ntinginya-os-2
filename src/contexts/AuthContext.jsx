@@ -12,17 +12,38 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return
-      setSession(data.session)
-      setLoading(false)
-    })
+
+    // Never leave the app stuck on the startup spinner if session
+    // restoration is delayed or fails while the device is offline.
+    const startupTimeout = setTimeout(() => {
+      if (active) setLoading(false)
+    }, 8000)
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      if (!active) return
       setSession(next)
       setLoading(false)
+      clearTimeout(startupTimeout)
     })
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) console.warn('Session restoration:', error.message)
+        setSession(data?.session ?? null)
+      })
+      .catch((error) => {
+        if (active) console.warn('Session restoration failed:', error)
+      })
+      .finally(() => {
+        if (!active) return
+        clearTimeout(startupTimeout)
+        setLoading(false)
+      })
+
     return () => {
       active = false
+      clearTimeout(startupTimeout)
       sub.subscription.unsubscribe()
     }
   }, [])
