@@ -9,6 +9,7 @@ import { useI18n } from '../i18n/I18nContext'
 import { useDeviceNotifications, useNotificationSync, useUnreadCount } from '../hooks/useAppServices'
 import { useNotificationActionMessages, useSnoozeLoop } from '../hooks/useSmartActions'
 import Logo from '../components/Logo'
+import DashboardHomeHero from '../components/dashboard/DashboardHomeHero'
 import Modal from '../components/ui/Modal'
 import { isNativePlatform } from '../lib/platform'
 
@@ -114,7 +115,7 @@ export default function AppLayout() {
     <div className="flex min-h-dvh">
       <Sidebar unread={unread} pathname={pathname} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b border-slate-200 bg-white/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden dark:border-white/10 dark:bg-surface-dark/95">
+        <header className={`sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b border-slate-200 bg-white/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden dark:border-white/10 dark:bg-surface-dark/95 ${pathname === '/dashboard' ? 'dashboard-mobile-header' : ''}`}>
           <Logo size={26} />
           <span className="min-w-0 flex-1 truncate text-base font-semibold">{current ? t(current.labelKey) : t('app.short')}</span>
           <LanguageSwitcher />
@@ -124,7 +125,8 @@ export default function AppLayout() {
           </Link>
         </header>
         <OfflineBanner />
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">
+        <main className={`mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8 ${pathname === '/dashboard' ? 'dashboard-main' : ''}`}>
+          {pathname === '/dashboard' && <DashboardHomeHero firstName={(profile?.full_name || '').trim().split(' ')[0]} unread={unread} />}
           <Outlet />
         </main>
       </div>

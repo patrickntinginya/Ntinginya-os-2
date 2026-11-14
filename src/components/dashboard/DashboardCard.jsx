@@ -7,7 +7,7 @@ import Spinner from '../ui/Spinner'
 /** Shared shell for every dashboard card: title, "view all" link, and loading / error / empty states. */
 export default function DashboardCard({ title, icon: Icon, to, linkLabel = 'View all', loading, error, empty, emptyText, emptyAction, children }) {
   return (
-    <Card className="flex flex-col p-4">
+    <Card className="dashboard-card flex flex-col p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           {Icon && <Icon size={18} className="text-brand-600 dark:text-brand-300" aria-hidden="true" />}

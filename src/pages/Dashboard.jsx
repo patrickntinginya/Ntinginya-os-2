@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, BookOpen, CalendarDays, CheckSquare, FolderKanban, Lightbulb, Repeat, Target, Wallet } from 'lucide-react'
+import { ArrowRight, Bell, BookOpen, CalendarDays, CheckSquare, FolderKanban, Lightbulb, Repeat, Target, Wallet } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSnapshot } from '../hooks/useSnapshot'
 import { useUnreadCount } from '../hooks/useAppServices'
@@ -29,7 +29,7 @@ const Row = ({ children }) => <li className="flex items-start justify-between ga
 const Sub = ({ children }) => <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{children}</span>
 const Muted = ({ children }) => <p className="text-xs text-slate-500 dark:text-slate-400">{children}</p>
 const Group = ({ title, children }) => (
-  <section aria-label={title} className="mb-8">
+  <section aria-label={title} className="dashboard-group mb-8">
     <h2 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">{title}</h2>
     <div className="grid gap-4 md:grid-cols-2">{children}</div>
   </section>
@@ -89,14 +89,75 @@ export default function Dashboard() {
   const bestStreak = [...v.habitSums].sort((a, b) => b.streak - a.streak)[0]
 
   return (
-    <div>
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{greeting()}{firstName ? `, ${firstName}` : ''}</h1>
-        <p className="mt-1 text-slate-500 dark:text-slate-400">{formatLongDate()}</p>
+    <div className="dashboard-page">
+      <header className="dashboard-welcome mb-6">
+        <div className="dashboard-welcome-content">
+          <span className="dashboard-welcome-eyebrow">{tr('Your day')}</span>
+          <h1>{greeting()}{firstName ? `, ${firstName}` : ''}</h1>
+          <p>{formatLongDate()}</p>
+        </div>
+        <div className="dashboard-welcome-decoration" aria-hidden="true">
+          <CalendarDays size={76} strokeWidth={1} />
+        </div>
       </header>
 
       {loading ? <Spinner /> : (
-        <div className="mb-8 grid gap-4 md:grid-cols-2">
+        <>
+          <section className="dashboard-focus mb-6" aria-label={tr('Daily focus')}>
+            <div className="dashboard-focus-icon">
+              <Lightbulb size={22} />
+            </div>
+            <div className="dashboard-focus-content">
+              <span className="dashboard-focus-label">{tr('Daily focus')}</span>
+              {v.ranked.length > 0 ? (
+                <>
+                  <h2>{v.ranked[0].task.title}</h2>
+                  <p>{v.ranked[0].rec.reasons[0] || tr('Your next best step')}</p>
+                </>
+              ) : (
+                <>
+                  <h2>{tr("You're clear for now")}</h2>
+                  <p>{tr('Add a task to get started')}</p>
+                </>
+              )}
+            </div>
+            <Link to="/today" className="dashboard-focus-action">
+              <span>{v.ranked.length > 0 ? tr('View task') : tr('Add a task')}</span>
+              <ArrowRight size={17} />
+            </Link>
+          </section>
+
+          <section className="dashboard-overview mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={tr('Today')}>
+            <Link to="/today" className="dashboard-stat">
+              <span className="dashboard-stat-icon"><CheckSquare size={19} /></span>
+              <span className="dashboard-stat-label">{tr('Important tasks')}</span>
+              <strong>{v.ranked.length}</strong>
+              <span className="dashboard-stat-caption">{tr('Open tasks')}</span>
+            </Link>
+
+            <Link to="/habits" className="dashboard-stat">
+              <span className="dashboard-stat-icon"><Repeat size={19} /></span>
+              <span className="dashboard-stat-label">{tr("Today's habits")}</span>
+              <strong>{habitDone}<small>/{dueHabits.length}</small></strong>
+              <span className="dashboard-stat-caption">{tr('Done today')}</span>
+            </Link>
+
+            <Link to="/goals" className="dashboard-stat">
+              <span className="dashboard-stat-icon"><Target size={19} /></span>
+              <span className="dashboard-stat-label">{tr('Goals')}</span>
+              <strong>{v.activeGoals.length}</strong>
+              <span className="dashboard-stat-caption">{tr('Active goals')}</span>
+            </Link>
+
+            <Link to="/notifications" className="dashboard-stat">
+              <span className="dashboard-stat-icon"><Bell size={19} /></span>
+              <span className="dashboard-stat-label">{tr('Notifications')}</span>
+              <strong>{unread}</strong>
+              <span className="dashboard-stat-caption">{tr('Unread')}</span>
+            </Link>
+          </section>
+
+          <div className="dashboard-feature-grid mb-8 grid gap-4 md:grid-cols-2">
           <BriefingCard briefing={v.briefing} name={firstName} />
           <LifeScoreCard score={v.score} />
           <Card className="p-4 md:col-span-2">
@@ -110,7 +171,8 @@ export default function Dashboard() {
             )}
             <Muted>{tr('Rule-based: simple comparisons of your own numbers. No AI is used here.')}</Muted>
           </Card>
-        </div>
+          </div>
+        </>
       )}
 
       <Group title={tr('Today')}>
