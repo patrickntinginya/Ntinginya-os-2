@@ -27,7 +27,7 @@ test('Community is a MAIN item: in the sidebar list and the mobile bottom bar, n
   assert.ok(BOTTOM_NAV_PATHS.length <= 5)
   assert.ok(ALL_ITEMS.find((i) => i.to === '/community').icon, 'has its own icon')
   const layout = read('src/layouts/AppLayout.jsx')
-  assert.match(layout, /BOTTOM_NAV_PATHS\.map/)
+  assert.match(layout, /\['\/dashboard', '\/insights', '\/ai', '\/settings'\]\.map/)
   assert.match(layout, /min-w-0 flex-1/, 'six bottom-bar columns shrink instead of overflowing small phones')
   assert.match(layout, /truncate/)
   assert.match(read('src/App.jsx'), /path="\/community" element=\{<Community \/>\}/)

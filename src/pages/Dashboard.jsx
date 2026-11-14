@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSnapshot } from '../hooks/useSnapshot'
 import { useUnreadCount } from '../hooks/useAppServices'
 import DashboardCard from '../components/dashboard/DashboardCard'
+import DashboardMotivationBanner from '../components/dashboard/DashboardMotivationBanner'
 import BriefingCard from '../components/dashboard/BriefingCard'
 import LifeScoreCard from '../components/dashboard/LifeScoreCard'
 import ProgressBar from '../components/ui/ProgressBar'
@@ -35,7 +36,7 @@ const Group = ({ title, children }) => (
   </section>
 )
 
-export default function Dashboard() {
+export default function Dashboard({ statsOnly = false }) {
   const { user, profile } = useAuth()
   const { data, errors, loading, today } = useSnapshot(KEYS)
   const unread = useUnreadCount()
@@ -90,6 +91,7 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-page">
+      {!statsOnly && <>
       <header className="dashboard-welcome mb-6">
         <div className="dashboard-welcome-content">
           <span className="dashboard-welcome-eyebrow">{tr('Your day')}</span>
@@ -175,6 +177,9 @@ export default function Dashboard() {
         </>
       )}
 
+      </>}
+
+      {statsOnly && <>
       <Group title={tr('Today')}>
         <DashboardCard title={tr('Important tasks')} icon={CheckSquare} to="/today" linkLabel={tr('My Day')} loading={loading} error={errors.tasks}
           empty={v.ranked.length === 0} emptyText={tr('No open tasks. Nothing is waiting for you.')} emptyAction={tr('Add a task')}>
@@ -295,6 +300,9 @@ export default function Dashboard() {
           <div className="mt-2 flex flex-wrap gap-x-4"><Link to="/brainstorm" className="inline-flex min-h-[44px] items-center text-sm font-medium text-brand-700 dark:text-brand-300">{tr('Ideas')}</Link><Link to="/notes" className="inline-flex min-h-[44px] items-center text-sm font-medium text-brand-700 dark:text-brand-300">{tr('Notes')}</Link><Link to="/knowledge" className="inline-flex min-h-[44px] items-center text-sm font-medium text-brand-700 dark:text-brand-300">{tr('Knowledge')}</Link></div>
         </DashboardCard>
       </Group>
+      </>}
+
+      {!statsOnly && !loading && <DashboardMotivationBanner />}
     </div>
   )
 }

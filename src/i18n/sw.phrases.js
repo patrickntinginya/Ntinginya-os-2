@@ -407,6 +407,8 @@ export default {
   "Income vs expenses": "Mapato dhidi ya matumizi",
   "Incorrect email or password.": "Barua pepe au nenosiri si sahihi.",
   "Insights": "Uchambuzi",
+  "Stats": "Takwimu",
+  "Your activity, progress and performance in one place.": "Shughuli zako, maendeleo na utendaji wako sehemu moja.",
   "Knowledge": "Maarifa",
   "Largest expense categories:": "Kategoria kubwa za matumizi:",
   "Last 28 days": "Siku 28 zilizopita",

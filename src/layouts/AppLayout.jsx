@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, MoreHorizontal } from 'lucide-react'
-import { ALL_ITEMS, NAV_ITEMS, SECONDARY_ITEMS, BOTTOM_NAV_PATHS } from '../lib/navigation'
+import { ALL_ITEMS, NAV_ITEMS, SECONDARY_ITEMS } from '../lib/navigation'
 import OfflineBanner from '../components/OfflineBanner'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useAuth } from '../contexts/AuthContext'
@@ -59,7 +59,7 @@ function Sidebar({ unread, pathname }) {
 
 function BottomNav({ onMore, pathname }) {
   const { t } = useI18n()
-  const items = BOTTOM_NAV_PATHS.map((p) => ALL_ITEMS.find((i) => i.to === p))
+  const items = ['/dashboard', '/insights', '/ai', '/settings'].map((p) => ALL_ITEMS.find((i) => i.to === p)).filter(Boolean)
   const tab = (active) =>
     `flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] font-medium leading-tight ${
       active ? 'text-brand-700 dark:text-brand-300' : 'text-slate-500 dark:text-slate-400'
@@ -86,13 +86,13 @@ function BottomNav({ onMore, pathname }) {
         return (
           <NavLink key={item.to} to={item.to} className={() => tab(active)}>
             <Icon size={22} aria-hidden="true" />
-            <span className="max-w-full truncate">{t(item.labelKey)}</span>
+            <span className="max-w-full truncate">{item.to === '/insights' ? t('nav.stats') : item.to === '/settings' ? t('Profile') : t(item.labelKey)}</span>
           </NavLink>
         )
       })}
       <button type="button" onClick={onMore} className={tab(false)}>
         <MoreHorizontal size={22} aria-hidden="true" />
-        <span className="max-w-full truncate">{t('nav.more')}</span>
+        <span className="max-w-full truncate">{t('nav.menu')}</span>
       </button>
     </nav>
   )
@@ -117,7 +117,7 @@ export default function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className={`sticky top-0 z-20 flex min-h-14 items-center gap-2 border-b border-slate-200 bg-white/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden dark:border-white/10 dark:bg-surface-dark/95 ${pathname === '/dashboard' ? 'dashboard-mobile-header' : ''}`}>
           <Logo size={26} />
-          <span className="min-w-0 flex-1 truncate text-base font-semibold">{current ? t(current.labelKey) : t('app.short')}</span>
+          <span className="min-w-0 flex-1 truncate text-base font-semibold">{pathname === '/settings' ? t('Profile') : pathname === '/insights' ? t('nav.stats') : current ? t(current.labelKey) : t('app.short')}</span>
           <LanguageSwitcher />
           <Link to="/notifications" className="icon-btn relative" aria-label={`${t('nav.notifications')}${unread ? `, ${t('nav.unread', { count: unread })}` : ''}`}>
             <Bell size={20} />

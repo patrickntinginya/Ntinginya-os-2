@@ -54,7 +54,7 @@ test('focus is visible and touch targets are at least 44px', () => {
 test('mobile navigation: bottom bar, More menu, safe-area padding, no hidden-only navigation', () => {
   assert.match(layout, /md:hidden/)
   assert.match(layout, /safe-area-inset-bottom/)
-  assert.match(layout, /nav\.more/)
+  assert.match(layout, /nav\.menu/)
   assert.match(read('index.html'), /viewport-fit=cover/)
 })
 

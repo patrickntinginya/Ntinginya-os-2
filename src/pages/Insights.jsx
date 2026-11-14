@@ -13,6 +13,7 @@ import { formatMoney } from '../utils/format'
 import { completedPerWeek, minutesPerWeek, savingsRate, studyDaysInRange, taskStats } from '../utils/metrics'
 import { effectiveProgress } from '../utils/goals'
 import { tr } from '../i18n'
+import Dashboard from './Dashboard'
 
 const KEYS = ['tasks', 'sessions', 'monthly', 'goals', 'milestones', 'learning']
 const NotEnough = () => <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-white/5 dark:text-slate-400">{tr('Not enough data yet.')}</p>
@@ -43,7 +44,8 @@ export default function Insights() {
   const goalCounts = ['active', 'completed', 'paused', 'archived'].map((s) => [s, v.goals.filter((g) => g.status === s).length])
   return (
     <div>
-      <PageHeader title={tr('Insights')} subtitle={tr('Trends from your own records. Charts need at least two periods of data.')} />
+      <PageHeader title={tr('Stats')} subtitle={tr('Your activity, progress and performance in one place.')} />
+      <Dashboard statsOnly />
       <div className="space-y-4">
         <Section title={tr('Productivity')}>
           <div className="mb-4 grid grid-cols-3 gap-3">

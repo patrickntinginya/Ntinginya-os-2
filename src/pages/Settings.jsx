@@ -409,7 +409,7 @@ function PrivacySection() {
 export default function Settings() {
   return (
     <div>
-      <PageHeader title={tr('Settings')} />
+      <PageHeader title={tr('Profile')} />
       <div className="space-y-4">
         <ProfileSection />
         <AccountSection />
