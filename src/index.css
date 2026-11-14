@@ -1385,3 +1385,525 @@ html:not(.dark) .dashboard-main .nt-shortcut-heading h2 {
 html:not(.dark) .dashboard-main .nt-home-welcome p {
   color: #475569;
 }
+
+/* Premium Design System V2 — shared application surfaces */
+@layer components {
+  .premium-card {
+    border-radius: 1.25rem;
+    border-color: rgb(226 232 240 / 0.85);
+    background: linear-gradient(145deg, #ffffff 0%, #fbfefd 100%);
+    box-shadow: 0 5px 20px rgb(23 58 50 / 0.045);
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+
+  .dark .premium-card {
+    border-color: rgb(148 163 184 / 0.13);
+    background: linear-gradient(145deg, #18221e 0%, #141c19 100%);
+    box-shadow: 0 8px 28px rgb(0 0 0 / 0.12);
+  }
+
+  .premium-stat-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .premium-stat-card::before {
+    position: absolute;
+    top: 0;
+    left: 1.1rem;
+    width: 2.5rem;
+    height: 3px;
+    border-radius: 0 0 999px 999px;
+    background: linear-gradient(90deg, #2f8570, #78bfa9);
+    content: "";
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #2f8570 0%, #256b5b 55%, #1f5649 100%);
+    box-shadow: 0 4px 12px rgb(37 107 91 / 0.18);
+    transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.06);
+    box-shadow: 0 6px 17px rgb(37 107 91 / 0.25);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .btn-secondary {
+    border-color: rgb(47 133 112 / 0.24);
+    background: #f0f8f5;
+    color: #1f5649;
+  }
+
+  .dark .btn-secondary {
+    border-color: rgb(120 191 169 / 0.22);
+    background: rgb(47 133 112 / 0.12);
+    color: #c4f1df;
+  }
+
+  .btn-ghost {
+    border: 1px solid transparent;
+    transition: background 160ms ease, color 160ms ease;
+  }
+
+  .premium-page-header h1 {
+    letter-spacing: -0.035em;
+  }
+
+  .premium-page-header {
+    position: relative;
+  }
+
+  .input:focus,
+  .input:focus-visible {
+    border-color: #2f8570;
+    outline: 2px solid rgb(47 133 112 / 0.14);
+    outline-offset: 1px;
+    box-shadow: 0 0 0 3px rgb(47 133 112 / 0.08);
+  }
+
+  .dark .input:focus,
+  .dark .input:focus-visible {
+    border-color: #78bfa9;
+    outline-color: rgb(120 191 169 / 0.2);
+    box-shadow: 0 0 0 3px rgb(120 191 169 / 0.08);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .premium-card:hover {
+    border-color: rgb(47 133 112 / 0.25);
+    box-shadow: 0 9px 26px rgb(23 58 50 / 0.075);
+  }
+
+  .dark .premium-card:hover {
+    border-color: rgb(120 191 169 / 0.24);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-card,
+  .btn-primary,
+  .btn-ghost {
+    transition: none !important;
+  }
+}
+
+/* Premium Design System V2 — dialogs, forms and interaction elements */
+@layer components {
+  .premium-modal-panel {
+    border: 1px solid rgb(120 191 169 / 0.16);
+    box-shadow: 0 24px 80px rgb(15 23 42 / 0.24);
+    animation: premium-modal-enter 220ms ease-out;
+  }
+
+  .dark .premium-modal-panel {
+    border-color: rgb(120 191 169 / 0.15);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.4);
+  }
+
+  .premium-input {
+    border-radius: 0.9rem;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+
+  .premium-input:hover {
+    border-color: rgb(47 133 112 / 0.48);
+  }
+
+  .dark .premium-input:hover {
+    border-color: rgb(120 191 169 / 0.42);
+  }
+
+  .premium-tabs button:focus-visible {
+    outline: 2px solid #2f8570;
+    outline-offset: 3px;
+  }
+
+  .premium-empty-state {
+    box-shadow: 0 5px 20px rgb(23 58 50 / 0.035);
+  }
+}
+
+@keyframes premium-modal-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-modal-panel {
+    animation: none !important;
+  }
+}
+
+/* Premium Design System V2 — Finance, Planner, Goals and Habits */
+@layer components {
+  .premium-page {
+    min-width: 0;
+  }
+
+  .premium-finance-page .premium-tabs,
+  .premium-habits-page .premium-tabs {
+    scrollbar-width: none;
+  }
+
+  .premium-finance-page .premium-tabs::-webkit-scrollbar,
+  .premium-habits-page .premium-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .premium-planner-page .premium-date-control .input {
+    border-color: rgb(47 133 112 / 0.18);
+    background: white;
+    font-weight: 600;
+  }
+
+  .dark .premium-planner-page .premium-date-control .input {
+    background: #18221e;
+    color: white;
+  }
+
+  .premium-planner-card,
+  .premium-goal-card,
+  .premium-habit-card {
+    overflow: hidden;
+  }
+
+  .premium-planner-item {
+    min-width: 0;
+    border: 1px solid transparent;
+    transition: border-color 160ms ease, background 160ms ease;
+  }
+
+  .premium-goal-card,
+  .premium-habit-card {
+    border-color: rgb(47 133 112 / 0.12);
+  }
+
+  .premium-goal-card .premium-progress,
+  .premium-habit-card .premium-progress {
+    margin-top: 0.25rem;
+  }
+
+  .premium-goal-card button,
+  .premium-habit-card button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .premium-goal-card button:focus-visible,
+  .premium-habit-card button:focus-visible,
+  .premium-planner-item button:focus-visible {
+    outline: 2px solid #2f8570;
+    outline-offset: 3px;
+  }
+
+  .premium-habits-page .premium-habit-card .bg-brand-50,
+  .premium-goals-page .premium-goal-card .bg-brand-50 {
+    border: 1px solid rgb(47 133 112 / 0.1);
+  }
+}
+
+@media (max-width: 480px) {
+  .premium-planner-item {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .premium-planner-item > span:first-child {
+    width: auto;
+    min-width: 6rem;
+  }
+}
+
+
+/* Ntinginya Premium V2 — productivity pages */
+.premium-projects-page .premium-project-card,
+.premium-tasks-page .premium-task-card,
+.premium-today-page .premium-today-section,
+.premium-today-page .premium-today-summary {
+  border: 1px solid rgba(47, 133, 112, .13);
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(238,247,244,.82));
+  box-shadow: 0 8px 28px rgba(23,58,50,.055);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.dark .premium-projects-page .premium-project-card,
+.dark .premium-tasks-page .premium-task-card,
+.dark .premium-today-page .premium-today-section,
+.dark .premium-today-page .premium-today-summary {
+  border-color: rgba(120,191,169,.14);
+  background: linear-gradient(145deg, rgba(22,30,27,.98), rgba(27,69,59,.25));
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+
+.premium-projects-page .premium-project-card:hover,
+.premium-tasks-page .premium-task-card:hover {
+  border-color: rgba(47,133,112,.32);
+  box-shadow: 0 12px 32px rgba(23,58,50,.09);
+}
+
+.premium-today-page .premium-today-section h2 {
+  letter-spacing: -.02em;
+}
+
+.premium-today-page .premium-today-summary {
+  border-left: 3px solid #2f8570;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-projects-page .premium-project-card,
+  .premium-tasks-page .premium-task-card,
+  .premium-today-page .premium-today-section,
+  .premium-today-page .premium-today-summary {
+    transition: none;
+  }
+}
+
+/* Ntinginya Premium V2 — Learning */
+.premium-learning-page .premium-learning-card {
+  border: 1px solid rgba(47,133,112,.15);
+  background: linear-gradient(145deg, #fff, #eef7f4);
+  box-shadow: 0 8px 28px rgba(23,58,50,.055);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.dark .premium-learning-page .premium-learning-card {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, rgba(27,69,59,.35));
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+
+.premium-learning-page .premium-learning-card:hover {
+  border-color: rgba(47,133,112,.35);
+  box-shadow: 0 12px 32px rgba(23,58,50,.09);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-learning-page .premium-learning-card {
+    transition: none;
+  }
+}
+
+/* Ntinginya Premium V2 — Community and Marketplace */
+
+.premium-community-page,
+.premium-marketplace-page {
+  min-width: 0;
+}
+
+.premium-community-page .premium-tabs,
+.premium-marketplace-page .premium-tabs {
+  margin-bottom: 1.1rem;
+}
+
+.premium-community-page .premium-input,
+.premium-marketplace-page .input {
+  border-color: rgba(47,133,112,.18);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.premium-community-page .premium-input:focus,
+.premium-marketplace-page .input:focus {
+  border-color: #2f8570;
+  box-shadow: 0 0 0 3px rgba(47,133,112,.12);
+  outline: none;
+}
+
+.premium-marketplace-page .premium-marketplace-card,
+.premium-marketplace-page .premium-marketplace-form,
+.premium-marketplace-page .premium-appointment-card,
+.premium-community-page .premium-community-join {
+  border: 1px solid rgba(47,133,112,.15);
+  background: linear-gradient(145deg, #fff, #eef7f4);
+  box-shadow: 0 8px 28px rgba(23,58,50,.055);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.dark .premium-marketplace-page .premium-marketplace-card,
+.dark .premium-marketplace-page .premium-marketplace-form,
+.dark .premium-marketplace-page .premium-appointment-card,
+.dark .premium-community-page .premium-community-join {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, rgba(27,69,59,.35));
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+
+.premium-marketplace-page .premium-marketplace-card:hover {
+  border-color: rgba(47,133,112,.35);
+  box-shadow: 0 12px 32px rgba(23,58,50,.09);
+}
+
+.premium-marketplace-page .premium-marketplace-filters {
+  border: 1px solid rgba(47,133,112,.16);
+  background: linear-gradient(145deg, #fff, #eef7f4);
+  box-shadow: 0 6px 22px rgba(23,58,50,.045);
+}
+
+.dark .premium-marketplace-page .premium-marketplace-filters {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, #1b453b);
+}
+
+.premium-marketplace-page .premium-marketplace-profile {
+  border: 1px solid rgba(47,133,112,.17);
+  background: linear-gradient(145deg, #fff, #eef7f4);
+  box-shadow: 0 10px 30px rgba(23,58,50,.06);
+}
+
+.dark .premium-marketplace-page .premium-marketplace-profile {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, rgba(27,69,59,.4));
+}
+
+.premium-community-page > label input,
+.premium-marketplace-page input,
+.premium-marketplace-page select,
+.premium-marketplace-page textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  .premium-marketplace-page .premium-marketplace-filters {
+    border-radius: 1rem;
+  }
+
+  .premium-marketplace-page .premium-professional-card img {
+    border: 2px solid rgba(47,133,112,.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-marketplace-page .premium-marketplace-card,
+  .premium-community-page .premium-community-join {
+    transition: none;
+  }
+}
+
+
+/* Ntinginya Premium UI — AI, Stats and Profile */
+.premium-ai-page,
+.premium-insights-page,
+.premium-settings-page {
+  min-width: 0;
+}
+
+.premium-insights-page .premium-insights-section,
+.premium-settings-page .premium-settings-section {
+  border: 1px solid rgba(47,133,112,.16);
+  background: linear-gradient(145deg, #fff, #f3f8f5);
+  box-shadow: 0 8px 26px rgba(23,58,50,.045);
+}
+
+.dark .premium-insights-page .premium-insights-section,
+.dark .premium-settings-page .premium-settings-section {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, #192720);
+}
+
+.premium-insights-page .premium-insights-section h2,
+.premium-settings-page .premium-settings-section h2 {
+  color: #1f5649;
+  font-weight: 700;
+}
+
+.dark .premium-insights-page .premium-insights-section h2,
+.dark .premium-settings-page .premium-settings-section h2 {
+  color: #aad9c9;
+}
+
+.premium-ai-page .premium-ai-history {
+  overflow: hidden;
+  border: 1px solid rgba(47,133,112,.16);
+  border-radius: 1.25rem;
+  background: linear-gradient(160deg, #fff, #eef7f4);
+  box-shadow: 0 8px 26px rgba(23,58,50,.05);
+}
+
+.dark .premium-ai-page .premium-ai-history {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(160deg, #161e1b, #1b453b);
+}
+
+.premium-ai-page .premium-ai-workspace {
+  min-width: 0;
+}
+
+.premium-ai-page .premium-ai-welcome {
+  margin: 1rem 0;
+  padding: 2rem 1rem;
+  border: 1px solid rgba(47,133,112,.15);
+  border-radius: 1.5rem;
+  background: linear-gradient(145deg, #fff, #eef7f4);
+}
+
+.dark .premium-ai-page .premium-ai-welcome {
+  border-color: rgba(120,191,169,.16);
+  background: linear-gradient(145deg, #161e1b, #1b453b);
+}
+
+.premium-ai-page .premium-ai-welcome > p:first-of-type {
+  color: #1f5649;
+  font-weight: 750;
+}
+
+.dark .premium-ai-page .premium-ai-welcome > p:first-of-type {
+  color: #d5ece4;
+}
+
+.premium-ai-page .premium-ai-composer {
+  z-index: 5;
+  padding: .85rem;
+  border: 1px solid rgba(47,133,112,.18);
+  border-radius: 1.25rem;
+  background: rgba(244,247,245,.94);
+  box-shadow: 0 8px 26px rgba(23,58,50,.08);
+  backdrop-filter: blur(14px);
+}
+
+.dark .premium-ai-page .premium-ai-composer {
+  border-color: rgba(120,191,169,.2);
+  background: rgba(14,20,18,.94);
+}
+
+.premium-ai-page .premium-ai-controls {
+  gap: .55rem;
+}
+
+.premium-ai-page .premium-ai-workspace [aria-live="polite"] > div > p {
+  overflow-wrap: anywhere;
+}
+
+.premium-insights-page .premium-insights-section,
+.premium-settings-page .premium-settings-section {
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.premium-insights-page .premium-insights-section:hover,
+.premium-settings-page .premium-settings-section:hover {
+  border-color: rgba(47,133,112,.3);
+  box-shadow: 0 10px 28px rgba(23,58,50,.07);
+}
+
+@media (max-width: 640px) {
+  .premium-ai-page .premium-ai-composer {
+    margin-left: -.25rem;
+    margin-right: -.25rem;
+    border-radius: 1rem;
+  }
+
+  .premium-ai-page .premium-ai-welcome {
+    padding: 1.5rem .85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-insights-page .premium-insights-section,
+  .premium-settings-page .premium-settings-section {
+    transition: none;
+  }
+}

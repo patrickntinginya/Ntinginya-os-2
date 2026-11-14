@@ -16,7 +16,7 @@ import { isNativePlatform } from '../lib/platform'
 
 function Section({ title, description, children }) {
   return (
-    <Card as="section" className="p-5" aria-label={title}>
+    <Card as="section" className="premium-settings-section p-4 sm:p-5" aria-label={title}>
       <h2 className="text-lg font-semibold">{title}</h2>
       {description && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
       <div className="mt-4">{children}</div>
@@ -408,7 +408,7 @@ function PrivacySection() {
 
 export default function Settings() {
   return (
-    <div>
+    <div className="premium-page premium-settings-page">
       <PageHeader title={tr('Profile')} />
       <div className="space-y-4">
         <ProfileSection />

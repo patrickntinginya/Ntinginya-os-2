@@ -62,9 +62,9 @@ export default function Planner() {
   }
 
   return (
-    <div>
+    <div className="premium-page premium-planner-page">
       <PageHeader title={tr('Planner')} subtitle={tr('Suggested time blocks in your free time. Nothing is added or moved until you tap Add.')} />
-      <div className="mb-4 flex items-center gap-2">
+      <div className="premium-date-control mb-5 flex items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50/70 p-2 dark:border-emerald-400/10 dark:bg-emerald-500/[0.06]">
         <button type="button" className="btn btn-secondary !min-h-[44px]" onClick={() => setDay(addDays(day, -1))} aria-label={tr('Previous day')}>{tr('Prev')}</button>
         <input type="date" aria-label={tr('Plan date')} className="input flex-1" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
         <button type="button" className="btn btn-secondary !min-h-[44px]" onClick={() => setDay(addDays(day, 1))} aria-label={tr('Next day')}>{tr('Next')}</button>
@@ -72,8 +72,8 @@ export default function Planner() {
 
       {loading ? <Spinner /> : errors.tasks || errors.events ? <ErrorState message={errors.tasks || errors.events} onRetry={reload} /> : (
         <div className="space-y-4">
-          <Card className="p-4">
-            <h2 className="mb-3 text-base font-semibold">{day === today ? tr('Today') : formatDate(day)}, 08:00 {tr('to')} 20:00</h2>
+          <Card className="premium-planner-card p-4 sm:p-5">
+            <h2 className="mb-4 text-base font-bold tracking-tight text-brand-900 dark:text-emerald-100">{day === today ? tr('Today') : formatDate(day)}, 08:00 {tr('to')} 20:00</h2>
             {items.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">{tr('No events and no open tasks to plan.')} <Link to="/tasks" className="font-medium text-brand-700 dark:text-brand-300">{tr('Add a task')}</Link>.</p>
             ) : (
@@ -81,7 +81,7 @@ export default function Planner() {
                 {items.map((it) => {
                   const key = `${it.kind}:${it.refId}:${it.start}`
                   return (
-                    <li key={key + it.title} className={`flex items-center gap-3 rounded-xl p-3 ${it.kind === 'event' ? 'bg-slate-100 dark:bg-white/10' : 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30'}`}>
+                    <li key={key + it.title} className={`premium-planner-item flex items-center gap-3 rounded-xl p-3 ${it.kind === 'event' ? 'bg-slate-100 dark:bg-white/10' : 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30'}`}>
                       <span className="w-24 shrink-0 text-sm tabular-nums text-slate-600 dark:text-slate-300">{minToTime(it.start)} - {minToTime(it.end)}</span>
                       <span className="min-w-0 flex-1 font-medium">{it.title}</span>
                       {it.kind === 'event' ? <Badge><Lock size={12} className="mr-1" aria-hidden="true" />{tr('Scheduled')}</Badge> : added[key] ? (

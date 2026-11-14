@@ -344,10 +344,10 @@ export default function AiAssistant() {
   )
 
   return (
-    <div className="md:flex md:gap-6">
-      <aside className="hidden w-64 shrink-0 md:block" aria-label={tr('Conversations')}>{list}</aside>
+    <div className="premium-page premium-ai-page md:flex md:gap-6">
+      <aside className="premium-ai-history hidden w-64 shrink-0 md:block" aria-label={tr('Conversations')}>{list}</aside>
 
-      <div className="flex min-h-[calc(100dvh-11rem)] min-w-0 flex-1 flex-col md:min-h-[calc(100dvh-8rem)]">
+      <div className="premium-ai-workspace flex min-h-[calc(100dvh-11rem)] min-w-0 flex-1 flex-col md:min-h-[calc(100dvh-8rem)]">
         <PageHeader
           title={tr('AI Assistant')}
           subtitle={active ? active.title : 'Answers can use personal data you choose to share.'}
@@ -377,7 +377,7 @@ export default function AiAssistant() {
           {loadingConv ? (
             <Spinner />
           ) : messages.length === 0 ? (
-            <div className="py-6 text-center">
+            <div className="premium-ai-welcome py-6 text-center">
               <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">
                 <Sparkles size={26} aria-hidden="true" />
               </div>
@@ -421,8 +421,8 @@ export default function AiAssistant() {
           <div ref={endRef} />
         </div>
 
-        <div className="sticky bottom-20 mt-4 space-y-2 bg-canvas pt-2 md:bottom-4 dark:bg-canvas-dark">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="premium-ai-composer sticky bottom-20 mt-4 space-y-2 bg-canvas pt-2 md:bottom-4 dark:bg-canvas-dark">
+          <div className="premium-ai-controls flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="secondary"

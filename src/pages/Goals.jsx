@@ -80,10 +80,10 @@ function GoalCard({ goal, actions, ctx }) {
   const next = goal.status === 'active' ? nextActionForGoal(goal, milestones, tasks) : null
 
   return (
-    <Card className="p-4">
+    <Card className="premium-goal-card p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{goal.name}</p>
+          <p className="font-bold tracking-tight text-slate-900 dark:text-white">{goal.name}</p>
           {goal.description && <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{goal.description}</p>}
         </div>
         <ItemActions label={goal.name} onEdit={actions.edit} onDelete={actions.remove} />
@@ -153,6 +153,6 @@ export function makeGoalsConfig() {
 
 export default function Goals() {
   const config = useMemo(makeGoalsConfig, [])
-  return <ResourcePage config={config} />
+  return <div className="premium-page premium-goals-page"><ResourcePage config={config} /></div>
 }
 

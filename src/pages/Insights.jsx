@@ -17,7 +17,7 @@ import Dashboard from './Dashboard'
 
 const KEYS = ['tasks', 'sessions', 'monthly', 'goals', 'milestones', 'learning']
 const NotEnough = () => <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-white/5 dark:text-slate-400">{tr('Not enough data yet.')}</p>
-const Section = ({ title, children }) => <Card className="p-4"><h2 className="mb-3 text-base font-semibold">{title}</h2>{children}</Card>
+const Section = ({ title, children }) => <Card className="premium-insights-section p-4 sm:p-5"><h2 className="mb-3 text-base font-semibold">{title}</h2>{children}</Card>
 const weekLabel = (iso) => formatDate(iso).replace(/^\w+, /, '')
 
 export default function Insights() {
@@ -43,7 +43,7 @@ export default function Insights() {
 
   const goalCounts = ['active', 'completed', 'paused', 'archived'].map((s) => [s, v.goals.filter((g) => g.status === s).length])
   return (
-    <div>
+    <div className="premium-page premium-insights-page">
       <PageHeader title={tr('Stats')} subtitle={tr('Your activity, progress and performance in one place.')} />
       <Dashboard statsOnly />
       <div className="space-y-4">

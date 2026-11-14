@@ -22,7 +22,7 @@ import { tr } from '../i18n'
 const KEYS = ['tasks', 'events', 'reminders', 'goals', 'milestones']
 
 const Section = ({ icon: Icon, title, to, children }) => (
-  <Card className="p-4">
+  <Card className="premium-today-section p-4 sm:p-5">
     <div className="mb-3 flex items-center justify-between gap-2">
       <h2 className="flex items-center gap-2 text-base font-semibold">{Icon && <Icon size={18} className="text-brand-600 dark:text-brand-300" aria-hidden="true" />} {title}</h2>
       {to && <Link to={to} className="flex min-h-[44px] items-center px-1 text-sm font-medium text-brand-700 dark:text-brand-300">{tr('Open')}</Link>}
@@ -151,11 +151,11 @@ export default function Today() {
 
   const failed = errors.tasks || errors.events
   return (
-    <div>
+    <div className="premium-page premium-today-page">
       <PageHeader title={tr('My Day')} subtitle={formatLongDate()} />
       {loading ? <Spinner /> : failed ? <ErrorState message={failed} onRetry={reload} /> : (
         <div className="space-y-4">
-          <Card className="p-4"><p className="text-[15px]">{dailyInsight({ tasks: v.tasks, events: v.events, goalFlags: v.flags }, today)}</p></Card>
+          <Card className="premium-today-summary p-4 sm:p-5"><p className="text-[15px] leading-relaxed">{dailyInsight({ tasks: v.tasks, events: v.events, goalFlags: v.flags }, today)}</p></Card>
           {actionError && <ErrorState message={actionError} compact />}
 
           <Section icon={CheckSquare} title={tr('Top 3 priorities')} to="/tasks">

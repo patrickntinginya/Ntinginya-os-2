@@ -32,7 +32,7 @@ function TaskCard({ task, actions, lookups }) {
   }
 
   return (
-    <Card className="flex items-start gap-3 p-3">
+    <Card className="premium-task-card flex items-start gap-3 p-3 sm:p-4">
       <button type="button" onClick={toggle} role="checkbox" aria-checked={task.status === 'completed'} disabled={task.status === 'cancelled'}
         aria-label={task.status === 'completed' ? `Mark "${task.title}" as to do` : `Mark "${task.title}" as completed`}
         className="flex h-11 w-11 shrink-0 items-center justify-center disabled:opacity-40">
@@ -41,7 +41,7 @@ function TaskCard({ task, actions, lookups }) {
         </span>
       </button>
       <div className="min-w-0 flex-1 py-1.5">
-        <p className={`font-medium ${closed ? 'text-slate-400 line-through' : ''}`}>{task.title}</p>
+        <p className={`text-base font-semibold tracking-tight ${closed ? 'text-slate-400 line-through' : ''}`}>{task.title}</p>
         {task.notes && <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{task.notes}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge tone={PRIORITY_TONE[task.priority]}>{labelOf(TASK_PRIORITIES, task.priority)}</Badge>
@@ -105,5 +105,5 @@ export function makeTasksConfig() {
 
 export default function Tasks() {
   const config = useMemo(makeTasksConfig, [])
-  return <ResourcePage config={config} />
+  return <div className="premium-page premium-tasks-page"><ResourcePage config={config} /></div>
 }

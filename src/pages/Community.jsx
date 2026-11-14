@@ -35,7 +35,7 @@ function Join({ user, defaultName, onDone }) {
     try { onDone(await createProfile(user.id, { display_name: name })) } catch (e) { setError(tr(communityError(e) || friendlyError(e))) } finally { setBusy(false) }
   }
   return (
-    <Card className="mx-auto max-w-md p-5">
+    <Card className="premium-community-join mx-auto max-w-md p-5 sm:p-6">
       <h2 className="text-lg font-semibold">{tr('Join the Community')}</h2>
       <p className="mt-1 text-sm text-slate-500">{tr('Other members will see this name on your posts and comments. Your finances, tasks and notes always stay private.')}</p>
       <label className="mt-4 block text-sm font-medium">{tr('Display name')}<input className="input mt-1 w-full" maxLength={LIMITS.name} value={name} onChange={(e) => setName(e.target.value)} /></label>
@@ -80,14 +80,14 @@ export default function Community() {
 
   const tabs = [{ value: 'feed', label: 'Feed' }, { value: 'messages', label: 'Messages', badge: inbox.unreadTotal }, { value: 'trending', label: 'Trending' }, { value: 'groups', label: 'Groups' }, { value: 'me', label: 'My profile' }, ...(admin ? [{ value: 'moderation', label: 'Moderation' }] : [])]
   return (
-    <div>
+    <div className="premium-page premium-community-page">
       <PageHeader title={tr('Community')} subtitle={tr('Talk with other members, share progress and join groups.')} />
       <Tabs tabs={tabs} value={tab} onChange={setTab} label={tr('Community sections')} />
       {['feed', 'trending', 'groups'].includes(tab) && (
         <label className="relative mb-4 block">
           <span className="sr-only">{tr('Search Community')}</span>
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input type="search" className="input w-full pl-10" maxLength={LIMITS.search} placeholder={tr('Search posts, members and groups')} value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+          <input type="search" className="input premium-input w-full pl-10" maxLength={LIMITS.search} placeholder={tr('Search posts, members and groups')} value={searchText} onChange={(e) => setSearchText(e.target.value)} />
         </label>
       )}
       {tab === 'feed' && <><Composer userId={user.id} onPosted={() => setRefresh((n) => n + 1)} /><Feed scope="feed" search={search} me={user.id} refreshKey={refresh} /></>}

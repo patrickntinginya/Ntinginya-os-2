@@ -29,10 +29,10 @@ function ProjectCard({ project, actions, ctx }) {
   const tasks = own('tasks'), goals = own('goals'), ideas = own('ideas'), notes = own('notes')
   const done = tasks.filter((t) => t.status === 'completed').length
   return (
-    <Card className="p-4">
+    <Card className="premium-project-card p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{project.name}</p>
+          <p className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">{project.name}</p>
           {project.description && <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{project.description}</p>}
         </div>
         <ItemActions label={project.name} onEdit={actions.edit} onDelete={actions.remove} />
@@ -88,5 +88,5 @@ export function makeProjectsConfig() {
 
 export default function Projects() {
   const config = useMemo(makeProjectsConfig, [])
-  return <ResourcePage config={config} />
+  return <div className="premium-page premium-projects-page"><ResourcePage config={config} /></div>
 }

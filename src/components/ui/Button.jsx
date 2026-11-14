@@ -7,9 +7,22 @@ const VARIANTS = {
   ghost: 'btn btn-ghost',
 }
 
-export default function Button({ variant = 'primary', loading = false, className = '', children, disabled, type = 'button', ...rest }) {
+export default function Button({
+  variant = 'primary',
+  loading = false,
+  className = '',
+  children,
+  disabled,
+  type = 'button',
+  ...rest
+}) {
   return (
-    <button type={type} className={`${VARIANTS[variant]} ${className}`} disabled={disabled || loading} {...rest}>
+    <button
+      type={type}
+      className={`${VARIANTS[variant] || VARIANTS.primary} ${className}`}
+      disabled={disabled || loading}
+      {...rest}
+    >
       {loading && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
       {children}
     </button>

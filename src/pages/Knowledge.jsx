@@ -36,10 +36,10 @@ function LearningCard({ item, actions, ctx }) {
   }
 
   return (
-    <Card className="p-4">
+    <Card className="premium-learning-card p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-medium">{item.topic}</p>
+          <p className="text-base font-semibold tracking-tight text-slate-900 dark:text-white">{item.topic}</p>
           {item.learning_goal && <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{tr('Goal:')} {item.learning_goal}</p>}
           {item.description && <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{item.description}</p>}
         </div>
@@ -110,7 +110,7 @@ export function makeKnowledgeConfig() {
 export default function Knowledge() {
   const config = useMemo(makeKnowledgeConfig, [])
   return (
-    <div>
+    <div className="premium-page premium-learning-page">
       <AskAiPanel className="mb-5" title={tr('AI learning coach')} mode="learning_plan"
         description={tr('Describe what you want to learn. You get a step-by-step plan; nothing is saved until you press Confirm.')}
         inputLabel="What do you want to learn?" inputPlaceholder="For example: software development" buttonLabel={tr('Create a study plan')} />

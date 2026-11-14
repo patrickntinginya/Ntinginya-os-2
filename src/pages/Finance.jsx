@@ -23,7 +23,7 @@ const TABS = [
 export default function Finance() {
   const [tab, setTab] = useState('overview')
   return (
-    <div>
+    <div className="premium-page premium-finance-page">
       <PageHeader title={tr('Finance')} subtitle={tr('All amounts are in Tanzanian Shillings (TSh).')} />
       <Tabs tabs={TABS} value={tab} onChange={setTab} label={tr('Finance sections')} />
       {tab === 'overview' && <FinanceOverview />}

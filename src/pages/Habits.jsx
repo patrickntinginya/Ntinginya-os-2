@@ -92,7 +92,7 @@ function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, 
   const { habit } = s
   const days = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27))
   return (
-    <Card className="p-4">
+    <Card className="premium-habit-card p-4 sm:p-5">
       <div className="flex items-start gap-3">
         {!archived && (
           s.dueToday ? (
@@ -102,7 +102,7 @@ function HabitCard({ s, today, onToggle, onEdit, onArchive, onDelete, goalName, 
           ) : <span className="flex h-12 w-12 shrink-0 items-center justify-center text-xs text-slate-400">{tr('Off')}</span>
         )}
         <div className="min-w-0 flex-1 py-1">
-          <p className="font-medium">{habit.name}</p>
+          <p className="font-bold tracking-tight text-slate-900 dark:text-white">{habit.name}</p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             {s.streak > 0 && <Badge tone="warn"><Flame size={12} className="mr-1" aria-hidden="true" />{s.streak}{tr('-day streak')}</Badge>}
             {s.week && <span>{tr('Week')} {s.week.rate}%</span>}
@@ -231,7 +231,7 @@ export default function Habits() {
   }
 
   return (
-    <div>
+    <div className="premium-page premium-habits-page">
       <PageHeader title={tr('Habits')} subtitle={tr('Small things you repeat. Streaks count only the days a habit is due.')} action={<Button onClick={() => setForm({})}><Plus size={20} aria-hidden="true" /> {tr('Add')}</Button>} />
       {error && <div className="mb-4"><ErrorState message={error} compact /></div>}
       {loading ? <Spinner /> : errors.habits ? <ErrorState message={errors.habits} onRetry={reload} /> : habits.length === 0 ? (
